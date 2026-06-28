@@ -57,6 +57,7 @@ export default function ChatPage() {
 
   async function fetchMessagesBackground() {
     try {
+      if (!mongoUser) return;
       const [groupRes, managerRes] = await Promise.all([
         getGroupMessages(),
         getDirectMessages(mongoUser._id)
