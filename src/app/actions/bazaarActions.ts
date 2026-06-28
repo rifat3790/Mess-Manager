@@ -58,7 +58,7 @@ export async function assignBazaarSchedule(userId: string, fromDate: Date, toDat
   }
 }
 
-export async function updateBazaarScheduleStatus(id: string, status: 'Approved' | 'Pending') {
+export async function updateBazaarScheduleStatus(id: string, status: 'Approved' | 'Pending' | 'Completed') {
   try {
     await connectToDatabase();
     await BazaarSchedule.findByIdAndUpdate(id, { status });

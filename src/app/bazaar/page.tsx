@@ -74,7 +74,7 @@ export default function ManageBazaarPage() {
     }
   };
 
-  const handleStatusChange = async (id: string, status: 'Approved' | 'Pending') => {
+  const handleStatusChange = async (id: string, status: 'Approved' | 'Pending' | 'Completed') => {
     try {
       const res = await updateBazaarScheduleStatus(id, status);
       if (res.success) {
