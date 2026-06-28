@@ -77,6 +77,7 @@ export default function ChatPage() {
 
   async function fetchData() {
     try {
+      if (!mongoUser) return;
       setLoading(true);
       const [groupRes, managerRes, membersRes] = await Promise.all([
         getGroupMessages(),
