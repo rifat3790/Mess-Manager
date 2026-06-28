@@ -101,7 +101,7 @@ export default function ChatPage() {
 
   const handleSendGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!groupInput.trim()) return;
+    if (!groupInput.trim() || !mongoUser) return;
     
     setSending(true);
     const res = await sendGroupMessage(mongoUser._id, groupInput);
@@ -116,7 +116,7 @@ export default function ChatPage() {
 
   const handleSendManager = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!managerInput.trim()) return;
+    if (!managerInput.trim() || !mongoUser) return;
     
     if (!selectedMemberId) {
       toast.error("মেসেজ করার জন্য একজন মেম্বার সিলেক্ট করুন।");
@@ -143,7 +143,7 @@ export default function ChatPage() {
   }
 
   const renderMessage = (msg: any) => {
-    const isMe = msg.senderId?._id === mongoUser._id;
+    const isMe = msg.senderId?._id === mongoUser?._id;
     return (
       <div key={msg._id} className={`flex w-full mb-4 ${isMe ? 'justify-end' : 'justify-start'}`}>
         <div className={`flex max-w-[75%] ${isMe ? 'flex-row-reverse' : 'flex-row'} gap-3 items-end`}>
