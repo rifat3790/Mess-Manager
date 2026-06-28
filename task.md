@@ -1,0 +1,10 @@
+- [x] Profile Image Display (Topbar & Sidebar)
+- [x] Dynamic Mess Name (Topbar, Sidebar, Home, Login)
+- [x] Make pages full width globally
+- [x] Global Data Sync to Google Sheets for Meals, Deposits, Expenses
+- [x] Member restriction: Members can only view, cannot add/edit/delete.
+- [x] Edit/Delete functionality for Managers and Super Admins.
+- [x] Meal Input UI: Morning, Noon, Night separate inputs with Member selection below.
+- [x] Shared Expense UI: Select specific members for shared cost.
+- [x] Active Month Selection: Manager/Admin can select active month.
+- [x] Bazaar schedule individual date selection by Admin/Manager.
