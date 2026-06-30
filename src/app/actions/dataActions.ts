@@ -6,6 +6,7 @@ import Expense from "@/models/Expense";
 import Deposit from "@/models/Deposit";
 import Month from "@/models/Month";
 import User from "@/models/User";
+import Notification from "@/models/Notification";
 import { syncDataToSheet, updateDataInSheet, deleteDataFromSheet } from "./sheetActions";
 import { createNotification } from "./notificationActions";
 import mongoose from "mongoose";
@@ -1123,6 +1124,35 @@ export async function updateNotice(noticeId: string, title: string, content: str
     revalidatePath('/', 'layout');
     revalidatePath('/notice');
     return { success: true, notice: JSON.parse(JSON.stringify(notice)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function checkAndNotifyLowBalance(userId: string, balance: number) {
+  try {
+    await connectToDatabase();
+
+    if (balance > 0) return { success: true };
+
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+
+    const existingWarning = await Notification.findOne({
+      userId,
+      title: "কম ব্যালেন্স সতর্কতা ⚠️",
+      createdAt: { $gte: oneDayAgo }
+    });
+
+    if (!existingWarning) {
+      await Notification.create({
+        title: "কম ব্যালেন্স সতর্কতা ⚠️",
+        message: `আপনার বর্তমান ব্যালেন্স ${balance.toFixed(0)} ৳! মেসের মিল সচল রাখতে এবং মেস খরচ পরিচালনায় দ্রুত টাকা জমা করুন।`,
+        userId
+      });
+    }
+
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

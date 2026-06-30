@@ -46,7 +46,8 @@ import {
   getTodayMenu,
   updateTodayMenu,
   getLatestNotices,
-  createNotice
+  createNotice,
+  checkAndNotifyLowBalance
 } from './actions/dataActions';
 import { getBazaarSchedules } from './actions/bazaarActions';
 import { useRouter } from 'next/navigation';
@@ -90,6 +91,7 @@ export default function Home() {
   const [noticeContent, setNoticeContent] = useState('');
   const [noticeSubmitLoading, setNoticeSubmitLoading] = useState(false);
   const [estDailyMeals, setEstDailyMeals] = useState(2);
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
 
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
@@ -115,6 +117,13 @@ export default function Home() {
         const me = res.members.find((m: any) => m._id === mongoUser._id);
         if (me) {
           setMyStats(me);
+          if (me.balance <= 0) {
+            checkAndNotifyLowBalance(mongoUser._id, me.balance);
+            const dismissed = sessionStorage.getItem('balanceWarningDismissed');
+            if (dismissed !== 'true') {
+              setShowBalanceModal(true);
+            }
+          }
         } else {
           setMyStats({ totalMeal: 0, deposit: 0, totalCost: 0, balance: 0 });
         }
@@ -525,6 +534,32 @@ export default function Home() {
             </div>
           </div>
           <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 group-hover:text-rose-600 group-hover:bg-rose-50 transition-all flex-shrink-0">
+            <ChevronRight className="w-4.5 h-4.5" />
+          </div>
+        </div>
+      )}
+
+      {/* Low Balance Warning Banner */}
+      {myStats && myStats.balance <= 0 && (
+        <div 
+          onClick={() => router.push('/deposit')}
+          className="cursor-pointer bg-gradient-to-r from-rose-50 to-red-50 text-rose-800 rounded-3xl p-5 shadow-[0_8px_30px_rgb(244,63,94,0.02)] flex items-center justify-between gap-4 border border-rose-100/60 transition-all duration-300 hover:scale-[1.005] group"
+        >
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="w-11 h-11 bg-rose-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-rose-200 flex-shrink-0 animate-pulse">
+              <AlertCircle className="w-5.5 h-5.5" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-black text-rose-600 bg-rose-100/50 px-2.5 py-0.5 rounded-full uppercase tracking-wider">জরুরি সতর্কতা (Balance Alert)</span>
+              <p className="font-extrabold text-sm text-gray-800 mt-1">
+                আপনার ব্যালেন্স শেষ অথবা ঋণাত্মক ({myStats.balance.toFixed(0)} ৳)! মেসের মিল ও হিসাব সচল রাখতে দ্রুত টাকা জমা করুন।
+              </p>
+              <p className="text-[10px] font-bold text-gray-400 mt-0.5">
+                জমা দিতে এখানে ক্লিক করুন • জমা না করা পর্যন্ত এই সতর্কতাটি প্রদর্শিত হতে থাকবে
+              </p>
+            </div>
+          </div>
+          <div className="w-8 h-8 rounded-xl bg-white border border-rose-100/40 flex items-center justify-center text-rose-500 group-hover:bg-rose-500 group-hover:text-white transition-all flex-shrink-0">
             <ChevronRight className="w-4.5 h-4.5" />
           </div>
         </div>
@@ -1569,8 +1604,56 @@ export default function Home() {
                </tbody>
              </table>
            </div>
-         </div>
+        </div>
       </div>
+
+      {/* Low Balance Warning Popup Modal */}
+      {showBalanceModal && myStats && myStats.balance <= 0 && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-[2.5rem] max-w-md w-full p-6 md:p-8 shadow-2xl relative overflow-hidden animate-scaleUp border border-gray-100">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50/50 rounded-bl-full -mr-4 -mt-4 -z-10"></div>
+            
+            <div className="flex flex-col items-center text-center space-y-5">
+              <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 shadow-md shadow-rose-100 animate-bounce">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-gray-900 tracking-tight">আপনার ব্যালেন্স শেষ বা ঋণাত্মক!</h3>
+                <p className="text-gray-500 text-xs font-semibold px-2 leading-relaxed">
+                  মেসের হিসাব সচল রাখতে এবং আপনার মিল নিশ্চিত করতে অ্যাকাউন্টে দ্রুত ব্যালেন্স যুক্ত করুন।
+                </p>
+              </div>
+
+              <div className="w-full bg-rose-50/40 border border-rose-100/50 rounded-2xl p-4 flex justify-between items-center text-sm font-bold">
+                <span className="text-gray-500">আপনার বর্তমান ব্যালেন্স:</span>
+                <span className="text-rose-600 text-base font-black">{myStats.balance.toFixed(0)} ৳</span>
+              </div>
+
+              <div className="flex flex-col w-full gap-2.5 pt-3">
+                <button
+                  onClick={() => {
+                    setShowBalanceModal(false);
+                    router.push('/deposit');
+                  }}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all text-sm shadow-md shadow-indigo-150"
+                >
+                  টাকা জমা দিন (Deposit Now)
+                </button>
+                <button
+                  onClick={() => {
+                    sessionStorage.setItem('balanceWarningDismissed', 'true');
+                    setShowBalanceModal(false);
+                  }}
+                  className="w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold transition-all text-sm"
+                >
+                  পরে করব (Later)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
