@@ -59,7 +59,7 @@ export default function SingleReportPage() {
       const scrollPos = window.scrollY;
       window.scrollTo(0, 0);
 
-      // Temporary replacement of oklch and oklab functions in style tags to prevent html2canvas crash
+      // 1. Process inline style elements
       const styleTags = Array.from(document.querySelectorAll('style'));
       const originalContents = styleTags.map(tag => tag.innerHTML);
 
@@ -72,6 +72,37 @@ export default function SingleReportPage() {
           tag.innerHTML = text;
         }
       });
+
+      // 2. Process external linked stylesheets
+      const linkTags = Array.from(document.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
+      const tempStyles: HTMLStyleElement[] = [];
+
+      for (const link of linkTags) {
+        try {
+          const href = link.href;
+          if (href && href.startsWith(window.location.origin)) {
+            const res = await fetch(href);
+            if (res.ok) {
+              let text = await res.text();
+              if (text.includes('oklch') || text.includes('oklab')) {
+                text = text.replace(/oklch\([^)]+\)/g, 'rgb(79, 70, 229)');
+                text = text.replace(/oklab\([^)]+\)/g, 'rgb(79, 70, 229)');
+                
+                // Create temporary style element
+                const tempStyle = document.createElement('style');
+                tempStyle.innerHTML = text;
+                document.head.appendChild(tempStyle);
+                tempStyles.push(tempStyle);
+
+                // Disable original link sheet so html2canvas doesn't read it
+                link.disabled = true;
+              }
+            }
+          }
+        } catch (linkErr) {
+          console.error("Failed to process external stylesheet:", link.href, linkErr);
+        }
+      }
       
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
@@ -80,9 +111,19 @@ export default function SingleReportPage() {
         backgroundColor: '#ffffff'
       });
 
-      // Restore original style tag contents immediately
+      // Restore original inline style tag contents immediately
       styleTags.forEach((tag, idx) => {
         tag.innerHTML = originalContents[idx];
+      });
+
+      // Re-enable original stylesheet links
+      linkTags.forEach(link => {
+        link.disabled = false;
+      });
+
+      // Remove temporary style elements
+      tempStyles.forEach(style => {
+        style.remove();
       });
       
       // Restore scroll
