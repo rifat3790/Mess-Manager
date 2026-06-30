@@ -28,7 +28,8 @@ import {
   Bell,
   ChefHat,
   Bookmark,
-  ChevronRight
+  ChevronRight,
+  Calculator
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -88,6 +89,7 @@ export default function Home() {
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeContent, setNoticeContent] = useState('');
   const [noticeSubmitLoading, setNoticeSubmitLoading] = useState(false);
+  const [estDailyMeals, setEstDailyMeals] = useState(2);
 
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
@@ -1092,6 +1094,81 @@ export default function Home() {
             )}
           </div>
 
+          {/* Meal Cost Estimator Widget (Unique and Premium) */}
+          <div suppressHydrationWarning className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] rounded-3xl p-6 relative overflow-hidden">
+            <div className="flex items-center gap-2 mb-4 border-b border-gray-50 pb-3">
+              <Calculator className="w-5 h-5 text-indigo-500 animate-pulse" />
+              <div>
+                <h3 className="font-extrabold text-gray-900 text-base">খাবারের খরচ ও মিল ক্যালকুলেটর</h3>
+                <p className="text-[11px] font-semibold text-gray-400 mt-0.5">আপনার আনুমানিক মাসিক খরচ হিসাব করুন</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/60 p-4 rounded-2xl">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700">প্রতিদিনের আনুমানিক মিল সংখ্যা:</label>
+                  <p className="text-[10px] text-gray-400 font-semibold mt-0.5">১ দিনে আপনি গড়ে কয়টি মিল খাবেন?</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setEstDailyMeals(prev => Math.max(0.5, prev - 0.5))}
+                    className="w-8 h-8 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl flex items-center justify-center font-bold text-gray-600 transition-colors text-sm shadow-sm"
+                  >
+                    -
+                  </button>
+                  <span className="text-base font-black text-gray-900 w-8 text-center">{estDailyMeals.toFixed(1)}</span>
+                  <button 
+                    onClick={() => setEstDailyMeals(prev => Math.min(5, prev + 0.5))}
+                    className="w-8 h-8 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl flex items-center justify-center font-bold text-gray-600 transition-colors text-sm shadow-sm"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Live calculations */}
+              {(() => {
+                const liveRate = globalStats.mealRate || 40;
+                const monthlyMeals = estDailyMeals * 30;
+                const estimatedCost = monthlyMeals * liveRate;
+                const currentDeposit = myStats.deposit || 0;
+                const extraNeeded = Math.max(0, estimatedCost - currentDeposit);
+                const isSufficient = currentDeposit >= estimatedCost;
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-indigo-50/20 border border-indigo-50/50 p-3.5 rounded-2xl">
+                      <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider">আনুমানিক মাসিক খরচ</p>
+                      <p className="text-xl font-black text-gray-900 mt-1">{estimatedCost.toFixed(0)} ৳</p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-0.5">মিল রেট: {liveRate.toFixed(2)} ৳ হিসেবে</p>
+                    </div>
+
+                    <div className={cn(
+                      "p-3.5 rounded-2xl border",
+                      isSufficient 
+                        ? "bg-emerald-50/20 border-emerald-100/50 text-emerald-800" 
+                        : "bg-rose-50/20 border-rose-100/50 text-rose-800"
+                    )}>
+                      <p className={cn(
+                        "text-[9px] font-bold uppercase tracking-wider",
+                        isSufficient ? "text-emerald-600" : "text-rose-600"
+                      )}>
+                        {isSufficient ? "ডিপোজিট পর্যাপ্ত ✅" : "আরও ডিপোজিট লাগবে ⚠️"}
+                      </p>
+                      <p className="text-xl font-black mt-1">
+                        {isSufficient ? "৳ ০.০০" : `${extraNeeded.toFixed(0)} ৳`}
+                      </p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-0.5">
+                        {isSufficient ? "আপনার জমা পর্যাপ্ত আছে" : "বাজেট মেলাতে জমা করতে হবে"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
           {/* Pending Meal Requests Panel (Only visible to Managers/Admins) */}
           {isManagerOrAdmin && pendingRequests.length > 0 && (
             <div suppressHydrationWarning className="bg-white shadow-[0_8px_30px_rgb(245,158,11,0.04)] rounded-3xl p-6 relative overflow-hidden">
@@ -1205,7 +1282,7 @@ export default function Home() {
                  {isManagerOrAdmin ? (
                    <button 
                      onClick={() => router.push('/bazaar')}
-                     className="w-full py-3 bg-gray-955 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 text-sm shadow-md"
+                     className="w-full py-3 bg-gray-900 hover:bg-gray-950 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 text-sm shadow-md"
                    >
                      <Calendar className="w-4 h-4" />
                      শিডিউল ম্যানেজ করুন
