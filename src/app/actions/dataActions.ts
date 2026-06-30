@@ -10,6 +10,7 @@ import { syncDataToSheet, updateDataInSheet, deleteDataFromSheet } from "./sheet
 import { createNotification } from "./notificationActions";
 import mongoose from "mongoose";
 import MealRequest from "@/models/MealRequest";
+import { revalidatePath } from "next/cache";
 
 export async function addMeal(monthId: string, userId: string, date: Date, mealCount: number) {
   try {
@@ -44,6 +45,7 @@ export async function addMeal(monthId: string, userId: string, date: Date, mealC
 
     await createNotification("নতুন মিল যুক্ত করা হয়েছে", `${user.name}-এর জন্য ${mealCount} টি মিল যুক্ত করা হয়েছে।`);
 
+    revalidatePath('/', 'layout');
     return { success: true, meal: JSON.parse(JSON.stringify(meal)) };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -83,6 +85,7 @@ export async function addExpense(monthId: string, userId: string | null, type: '
 
     await createNotification("নতুন খরচ যুক্ত করা হয়েছে", `${memberName}-এর ${amount} টাকার একটি নতুন খরচ (${type}) যুক্ত করা হয়েছে।`);
 
+    revalidatePath('/', 'layout');
     return { success: true, expense: JSON.parse(JSON.stringify(expense)) };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -115,6 +118,7 @@ export async function addDeposit(monthId: string, userId: string, amount: number
 
     await createNotification("নতুন জমা", `${user.name} এর অ্যাকাউন্টে ${amount} টাকা জমা করা হয়েছে।`);
 
+    revalidatePath('/', 'layout');
     return { success: true, deposit: JSON.parse(JSON.stringify(deposit)) };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -539,6 +543,7 @@ export async function addBulkMeals(monthId: string, date: Date, mealsData: { use
       }
     }
 
+    revalidatePath('/', 'layout');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -740,6 +745,7 @@ export async function updateUserMealForDate(
     }
 
     // Re-fetch and return updated status
+    revalidatePath('/', 'layout');
     return getUserMealStatusForTodayAndTomorrow(userId);
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -802,6 +808,7 @@ export async function createOrUpdateMealRequest(
       );
     }
 
+    revalidatePath('/', 'layout');
     return getUserMealStatusForTodayAndTomorrow(userId);
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -856,12 +863,17 @@ export async function approveMealRequest(requestId: string, adminUserId: string)
     const month = await Month.findById(request.monthId);
 
     if (existingMeal) {
-      existingMeal.breakfast = request.breakfast;
-      existingMeal.lunch = request.lunch;
-      existingMeal.dinner = request.dinner;
-      existingMeal.mealCount = mealCount;
+      const newBreakfast = (existingMeal.breakfast || 0) + request.breakfast;
+      const newLunch = (existingMeal.lunch || 0) + request.lunch;
+      const newDinner = (existingMeal.dinner || 0) + request.dinner;
+      const newMealCount = newBreakfast + newLunch + newDinner;
 
-      if (mealCount <= 0) {
+      existingMeal.breakfast = newBreakfast;
+      existingMeal.lunch = newLunch;
+      existingMeal.dinner = newDinner;
+      existingMeal.mealCount = newMealCount;
+
+      if (newMealCount <= 0) {
         const idToDelete = existingMeal._id.toString();
         await existingMeal.deleteOne();
         if (month) {
@@ -877,7 +889,7 @@ export async function approveMealRequest(requestId: string, adminUserId: string)
           try {
             await updateDataInSheet(month.sheetTabName, existingMeal._id.toString(), {
               type: 'Meal',
-              amount: mealCount,
+              amount: newMealCount,
               time: new Date().toLocaleTimeString(),
             });
           } catch (sheetErr) {
@@ -926,6 +938,8 @@ export async function approveMealRequest(requestId: string, adminUserId: string)
       );
     }
 
+    revalidatePath('/', 'layout');
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -957,6 +971,7 @@ export async function rejectMealRequest(requestId: string, adminUserId: string) 
       );
     }
 
+    revalidatePath('/', 'layout');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

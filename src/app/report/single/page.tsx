@@ -58,12 +58,31 @@ export default function SingleReportPage() {
       // Known fix for html2canvas blank issue: reset scroll position before capture
       const scrollPos = window.scrollY;
       window.scrollTo(0, 0);
+
+      // Temporary replacement of oklch and oklab functions in style tags to prevent html2canvas crash
+      const styleTags = Array.from(document.querySelectorAll('style'));
+      const originalContents = styleTags.map(tag => tag.innerHTML);
+
+      styleTags.forEach(tag => {
+        if (tag.innerHTML.includes('oklch') || tag.innerHTML.includes('oklab')) {
+          let text = tag.innerHTML;
+          // Replace oklch(...) and oklab(...) with rgb fallback to avoid parse crash
+          text = text.replace(/oklch\([^)]+\)/g, 'rgb(79, 70, 229)'); // indigo-600 fallback
+          text = text.replace(/oklab\([^)]+\)/g, 'rgb(79, 70, 229)');
+          tag.innerHTML = text;
+        }
+      });
       
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff'
+      });
+
+      // Restore original style tag contents immediately
+      styleTags.forEach((tag, idx) => {
+        tag.innerHTML = originalContents[idx];
       });
       
       // Restore scroll

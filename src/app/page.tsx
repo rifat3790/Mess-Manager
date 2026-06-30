@@ -140,21 +140,12 @@ export default function Home() {
     fetchPendingRequests();
   }, [user, mongoUser]);
 
-  // Sync draft meals with actual meals state
+  // Initialize draft meals to 0 by default for standard member request input
   useEffect(() => {
     if (myMeals) {
-      // If there is a pending request, we show the pending counts in draft. Otherwise show current counts.
       setDraftMeals({
-        today: {
-          breakfast: myMeals.pendingToday ? myMeals.pendingToday.breakfast : myMeals.today.breakfast,
-          lunch: myMeals.pendingToday ? myMeals.pendingToday.lunch : myMeals.today.lunch,
-          dinner: myMeals.pendingToday ? myMeals.pendingToday.dinner : myMeals.today.dinner,
-        },
-        tomorrow: {
-          breakfast: myMeals.pendingTomorrow ? myMeals.pendingTomorrow.breakfast : myMeals.tomorrow.breakfast,
-          lunch: myMeals.pendingTomorrow ? myMeals.pendingTomorrow.lunch : myMeals.tomorrow.lunch,
-          dinner: myMeals.pendingTomorrow ? myMeals.pendingTomorrow.dinner : myMeals.tomorrow.dinner,
-        }
+        today: { breakfast: 0, lunch: 0, dinner: 0 },
+        tomorrow: { breakfast: 0, lunch: 0, dinner: 0 }
       });
     }
   }, [myMeals]);
@@ -205,17 +196,11 @@ export default function Home() {
     }));
   };
 
-  // Check if draft has changes compared to base state (pending request if exists, otherwise current meal)
+  // Check if draft has changes (i.e. is any value greater than 0)
   const hasChanges = (dateStr: 'today' | 'tomorrow') => {
-    if (!myMeals || !draftMeals) return false;
-    const current = myMeals[dateStr];
-    const pending = dateStr === 'today' ? myMeals.pendingToday : myMeals.pendingTomorrow;
+    if (!draftMeals) return false;
     const draft = draftMeals[dateStr];
-    
-    const base = pending || current;
-    return draft.breakfast !== base.breakfast ||
-           draft.lunch !== base.lunch ||
-           draft.dinner !== base.dinner;
+    return draft.breakfast > 0 || draft.lunch > 0 || draft.dinner > 0;
   };
 
   // Submit Meal Request (Standard members)
@@ -235,6 +220,10 @@ export default function Home() {
           pendingToday: res.pendingToday,
           pendingTomorrow: res.pendingTomorrow
         });
+        setDraftMeals(prev => ({
+          ...prev!,
+          [dateStr]: { breakfast: 0, lunch: 0, dinner: 0 }
+        }));
         toast.success("মিলের অনুরোধ সফলভাবে পাঠানো হয়েছে!");
         fetchPendingRequests(); // refresh if we are also admin/manager (though they edit directly)
       } else {
@@ -668,6 +657,25 @@ export default function Home() {
                           </button>
                         </div>
                       </div>
+                      
+                      {/* Show current actual meal count for standard member */}
+                      {!isManagerOrAdmin && (
+                        <div className="mt-3 text-[11px] font-bold text-gray-500 bg-white p-2.5 rounded-xl border border-gray-100 flex justify-between items-center">
+                          <span>বর্তমান মিল:</span>
+                          <span className="text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-md">
+                            সকাল: {myMeals.today.breakfast}, দুপুর: {myMeals.today.lunch}, রাত: {myMeals.today.dinner}
+                          </span>
+                        </div>
+                      )}
+                      {/* Show pending request if exists */}
+                      {!isManagerOrAdmin && myMeals.pendingToday && (
+                        <div className="mt-2 text-[11px] font-extrabold text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100/50 flex justify-between items-center animate-pulse">
+                          <span>পেন্ডিং অনুরোধ:</span>
+                          <span>
+                            সকাল: {myMeals.pendingToday.breakfast}, দুপুর: {myMeals.pendingToday.lunch}, রাত: {myMeals.pendingToday.dinner}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -808,6 +816,25 @@ export default function Home() {
                           </button>
                         </div>
                       </div>
+                      
+                      {/* Show current actual meal count for standard member */}
+                      {!isManagerOrAdmin && (
+                        <div className="mt-3 text-[11px] font-bold text-gray-500 bg-white p-2.5 rounded-xl border border-gray-100 flex justify-between items-center">
+                          <span>বর্তমান মিল:</span>
+                          <span className="text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-md">
+                            সকাল: {myMeals.tomorrow.breakfast}, দুপুর: {myMeals.tomorrow.lunch}, রাত: {myMeals.tomorrow.dinner}
+                          </span>
+                        </div>
+                      )}
+                      {/* Show pending request if exists */}
+                      {!isManagerOrAdmin && myMeals.pendingTomorrow && (
+                        <div className="mt-2 text-[11px] font-extrabold text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100/50 flex justify-between items-center animate-pulse">
+                          <span>পেন্ডিং অনুরোধ:</span>
+                          <span>
+                            সকাল: {myMeals.pendingTomorrow.breakfast}, দুপুর: {myMeals.pendingTomorrow.lunch}, রাত: {myMeals.pendingTomorrow.dinner}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
