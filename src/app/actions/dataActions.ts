@@ -566,3 +566,144 @@ export async function removeMember(adminUserId: string, memberId: string) {
     return { success: false, error: error.message };
   }
 }
+
+export async function getUserMealStatusForTodayAndTomorrow(userId: string) {
+  try {
+    await connectToDatabase();
+    
+    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+    if (!activeMonth) {
+      return { success: false, error: "No active month" };
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    const tomorrowStart = new Date();
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    tomorrowStart.setHours(0, 0, 0, 0);
+    const tomorrowEnd = new Date();
+    tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+    tomorrowEnd.setHours(23, 59, 59, 999);
+
+    const todayMeal = await Meal.findOne({
+      monthId: activeMonth._id,
+      userId,
+      date: { $gte: todayStart, $lte: todayEnd }
+    });
+
+    const tomorrowMeal = await Meal.findOne({
+      monthId: activeMonth._id,
+      userId,
+      date: { $gte: tomorrowStart, $lte: tomorrowEnd }
+    });
+
+    return {
+      success: true,
+      activeMonthId: activeMonth._id.toString(),
+      today: todayMeal ? JSON.parse(JSON.stringify(todayMeal)) : { breakfast: 0, lunch: 0, dinner: 0, mealCount: 0, date: todayStart },
+      tomorrow: tomorrowMeal ? JSON.parse(JSON.stringify(tomorrowMeal)) : { breakfast: 0, lunch: 0, dinner: 0, mealCount: 0, date: tomorrowStart }
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateUserMealForDate(
+  userId: string,
+  dateStr: 'today' | 'tomorrow',
+  mealType: 'breakfast' | 'lunch' | 'dinner',
+  newValue: number
+) {
+  try {
+    await connectToDatabase();
+
+    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+    if (!activeMonth) {
+      return { success: false, error: "No active month" };
+    }
+
+    const targetDate = new Date();
+    if (dateStr === 'tomorrow') {
+      targetDate.setDate(targetDate.getDate() + 1);
+    }
+    targetDate.setHours(12, 0, 0, 0); // avoids timezone matching edges
+
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let existing = await Meal.findOne({
+      monthId: activeMonth._id,
+      userId,
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    const user = await User.findById(userId);
+    if (!user) return { success: false, error: "User not found" };
+
+    if (existing) {
+      const oldVal = existing[mealType] || 0;
+      existing[mealType] = newValue;
+      
+      existing.mealCount = (existing.breakfast || 0) + (existing.lunch || 0) + (existing.dinner || 0);
+      
+      if (existing.mealCount <= 0) {
+        const idToDelete = existing._id.toString();
+        await existing.deleteOne();
+        try {
+          await deleteDataFromSheet(activeMonth.sheetTabName, idToDelete);
+        } catch (sheetErr) {
+          console.error("Sheets delete error:", sheetErr);
+        }
+      } else {
+        await existing.save();
+        try {
+          await updateDataInSheet(activeMonth.sheetTabName, existing._id.toString(), {
+            type: 'Meal',
+            amount: existing.mealCount,
+            time: new Date().toLocaleTimeString(),
+          });
+        } catch (sheetErr) {
+          console.error("Sheets update error:", sheetErr);
+        }
+      }
+    } else {
+      if (newValue > 0) {
+        const newMeal = new Meal({
+          monthId: activeMonth._id,
+          userId,
+          date: targetDate,
+          breakfast: mealType === 'breakfast' ? newValue : 0,
+          lunch: mealType === 'lunch' ? newValue : 0,
+          dinner: mealType === 'dinner' ? newValue : 0,
+          mealCount: newValue
+        });
+        await newMeal.save();
+
+        try {
+          await syncDataToSheet(activeMonth.sheetTabName, {
+            date: targetDate.toLocaleDateString(),
+            memberName: user.name,
+            type: 'Meal',
+            description: 'Daily Meal',
+            amount: newValue,
+            time: new Date().toLocaleTimeString(),
+            _id: newMeal._id.toString()
+          });
+        } catch (sheetErr) {
+          console.error("Sheets sync error:", sheetErr);
+        }
+      }
+    }
+
+    // Re-fetch and return updated status
+    return getUserMealStatusForTodayAndTomorrow(userId);
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
