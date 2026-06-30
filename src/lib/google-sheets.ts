@@ -3,7 +3,11 @@ import { JWT } from 'google-auth-library';
 
 export async function getGoogleSheet() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  let rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+  if (rawPrivateKey && rawPrivateKey.startsWith('"') && rawPrivateKey.endsWith('"')) {
+    rawPrivateKey = rawPrivateKey.substring(1, rawPrivateKey.length - 1);
+  }
+  const privateKey = rawPrivateKey?.replace(/\\n/g, '\n');
   const sheetId = process.env.GOOGLE_SHEET_ID;
 
   if (!email || !privateKey || !sheetId) {
