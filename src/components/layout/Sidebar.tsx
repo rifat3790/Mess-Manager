@@ -23,7 +23,8 @@ import {
   Coffee,
   PlusCircle,
   BookOpen,
-  MessageSquare
+  MessageSquare,
+  Bell
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -70,6 +71,7 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
     ];
 
     if (role === 'Member' && settings) {
+      items.push({ name: 'মেস নোটিশ বোর্ড', icon: Bell, href: '/notice' });
       if (settings.addMeal) items.push({ name: 'মিল যুক্ত', icon: Utensils, href: '/meal' });
       if (settings.addExpense) items.push({ name: 'খরচ যুক্ত', icon: ShoppingBag, href: '/expense' });
       if (settings.addDeposit) items.push({ name: 'টাকা জমা', icon: Wallet, href: '/deposit' });
@@ -85,6 +87,7 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
     if (role === 'Manager' || role === 'Super Admin') {
       items = [
         { name: 'হোম পেজ', icon: Home, href: '/' },
+        { name: 'মেস নোটিশ বোর্ড', icon: Bell, href: '/notice' },
         { name: 'টাকা জমা', icon: Wallet, href: '/deposit' },
         { name: 'মিল যুক্ত', icon: Utensils, href: '/meal' },
         { name: 'খরচ যুক্ত', icon: ShoppingBag, href: '/expense' },

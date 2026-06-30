@@ -29,7 +29,7 @@ export function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
         />
         
         {/* Main Content Area */}
-        <main className="flex-1 flex flex-col min-h-screen overflow-hidden w-full" suppressHydrationWarning>
+        <main className="flex-1 flex flex-col min-h-screen overflow-hidden min-w-0" suppressHydrationWarning>
           <Topbar onMenuClick={() => setIsMobileMenuOpen(true)} />
           <div className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-thin" suppressHydrationWarning>
             {children}

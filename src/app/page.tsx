@@ -443,6 +443,15 @@ export default function Home() {
     return matchesSearch;
   });
 
+  // Find a notice posted in the last 3 days
+  const getRecentNoticeAlert = () => {
+    if (!notices || notices.length === 0) return null;
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    return notices.find(n => new Date(n.createdAt) >= threeDaysAgo);
+  };
+  const recentNotice = getRecentNoticeAlert();
+
   const hour = new Date().getHours();
   let greeting = 'শুভ সকাল';
   if (hour >= 12 && hour < 17) greeting = 'শুভ অপরাহ্ন';
@@ -492,6 +501,32 @@ export default function Home() {
            )}
         </div>
       </div>
+
+      {/* Recent Notice Alert Banner */}
+      {recentNotice && (
+        <div 
+          onClick={() => router.push('/notice')}
+          className="cursor-pointer bg-gradient-to-r from-rose-500/10 via-orange-500/10 to-amber-500/10 hover:from-rose-500/20 hover:to-amber-500/20 text-gray-900 rounded-3xl p-5 shadow-[0_8px_30px_rgb(244,63,94,0.03)] flex items-center justify-between gap-4 border border-rose-100/50 transition-all duration-300 group"
+        >
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="w-11 h-11 bg-rose-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-rose-200 flex-shrink-0 animate-pulse">
+              <Bell className="w-5.5 h-5.5" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider">মেস নোটিশ (New announcement)</span>
+              <p className="font-extrabold text-sm text-gray-800 mt-1 truncate">
+                {recentNotice.createdBy?.name?.split(' ')[0]} ({recentNotice.createdBy?.role}) একটি গুরুত্বপূর্ণ নোটিশ পোস্ট করেছেন: "{recentNotice.title}"
+              </p>
+              <p className="text-[10px] font-bold text-gray-400 mt-0.5">
+                পোস্টের সময়: {new Date(recentNotice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} • বিস্তারিত পড়তে এখানে ক্লিক করুন
+              </p>
+            </div>
+          </div>
+          <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 group-hover:text-rose-600 group-hover:bg-rose-50 transition-all flex-shrink-0">
+            <ChevronRight className="w-4.5 h-4.5" />
+          </div>
+        </div>
+      )}
 
       {/* Global Month Statistics Card - Light Premium Theme with box shadow */}
       <div suppressHydrationWarning className="relative bg-gradient-to-br from-indigo-50/90 via-white/80 to-blue-50/90 text-gray-900 rounded-[2.5rem] p-6 md:p-8 shadow-[0_12px_40px_rgb(99,102,241,0.06)] overflow-hidden">
@@ -1208,80 +1243,78 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Notice Board Card (Unique Notice board / Announcements Feature) */}
+          {/* Today's Bazaar In-charge Card */}
           <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
-            <div className="flex items-center justify-between mb-4 border-b border-gray-50 pb-3">
-              <h3 className="font-extrabold text-gray-955 text-base flex items-center gap-2">
-                <Bell className="w-4 h-4 text-indigo-500 animate-swing" />
-                মেস নোটিশ বোর্ড (Announcements)
-              </h3>
-              {isManagerOrAdmin && !isAddingNotice && (
-                <button
-                  onClick={() => setIsAddingNotice(true)}
-                  className="p-1 bg-indigo-55 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+             <div suppressHydrationWarning className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                <ShoppingBag className="w-24 h-24 text-rose-500" />
+             </div>
 
-            {isAddingNotice ? (
-              <form onSubmit={handleNoticeSubmit} className="space-y-3">
-                <input
-                  type="text"
-                  required
-                  value={noticeTitle}
-                  onChange={(e) => setNoticeTitle(e.target.value)}
-                  placeholder="নোটিশের শিরোনাম"
-                  className="w-full px-3 py-2 bg-gray-50 rounded-xl text-xs font-bold border border-gray-150 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
-                />
-                <textarea
-                  required
-                  value={noticeContent}
-                  onChange={(e) => setNoticeContent(e.target.value)}
-                  placeholder="বিস্তারিত বিবরণ..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-gray-50 rounded-xl text-xs font-bold border border-gray-150 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none resize-none"
-                />
-                <div className="flex justify-end gap-2 text-[10px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => { setIsAddingNotice(false); setNoticeTitle(''); setNoticeContent(''); }}
-                    className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-lg transition-colors"
-                  >
-                    বাতিল
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={noticeSubmitLoading}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center gap-1 shadow-sm"
-                  >
-                    {noticeSubmitLoading ? 'পোস্ট হচ্ছে...' : 'পোস্ট করুন'}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-3.5 max-h-[220px] overflow-y-auto scrollbar-thin">
-                {notices.length === 0 ? (
-                  <div className="text-center text-gray-400 text-xs font-bold py-6">কোনো নোটিশ দেওয়া হয়নি।</div>
-                ) : (
-                  notices.map((n) => (
-                    <div key={n._id} className="bg-gray-50/50 p-3 rounded-2xl border border-gray-100/50 space-y-1 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-extrabold text-xs text-gray-900 capitalize">{n.title}</span>
-                        <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
-                          {new Date(n.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                        </span>
-                      </div>
-                      <p className="text-[11px] font-semibold text-gray-600 leading-relaxed">{n.content}</p>
-                      <p className="text-[9px] font-bold text-gray-400 text-right">
-                        পোস্ট করেছেন: {n.createdBy?.name.split(' ')[0]} ({n.createdBy?.role})
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+             <div suppressHydrationWarning className="relative z-10 flex-1 flex flex-col">
+               <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
+                 <ShoppingBag className="w-5 h-5 text-rose-500" />
+                 আজকের বাজার কার?
+               </h3>
+               {(() => {
+                 const getTodayBazaarInCharge = () => {
+                   if (bazaarSchedules.length === 0) return null;
+                   const today = new Date();
+                   today.setHours(0, 0, 0, 0);
+                   return bazaarSchedules.find(s => {
+                     const from = new Date(s.fromDate);
+                     from.setHours(0,0,0,0);
+                     const to = new Date(s.toDate);
+                     to.setHours(23,59,59,999);
+                     return today >= from && today <= to && s.status === 'Approved';
+                   });
+                 };
+                 const todayBazaar = getTodayBazaarInCharge();
+
+                 if (todayBazaar) {
+                   return (
+                     <div className="space-y-3">
+                       <div className="flex items-center gap-3 bg-rose-50/50 p-3.5 rounded-2xl border border-rose-100/50">
+                         <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-750 flex items-center justify-center font-bold flex-shrink-0">
+                           {todayBazaar.userId?.name?.charAt(0).toUpperCase()}
+                         </div>
+                         <div>
+                           <p className="font-extrabold text-sm text-gray-900 capitalize">{todayBazaar.userId?.name}</p>
+                           <p className="text-[10px] font-bold text-gray-400">মেস মেম্বার (আজকের বাজার কারিগর)</p>
+                         </div>
+                       </div>
+                       
+                       {/* Checklist suggestions */}
+                       <div className="bg-gray-50/80 p-3.5 rounded-2xl space-y-2">
+                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">বাজারের চেকলিস্ট (Suggestions):</p>
+                         <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-gray-600">
+                           <label className="flex items-center gap-1.5 cursor-pointer">
+                             <input type="checkbox" defaultChecked className="rounded border-gray-300 text-rose-600 focus:ring-rose-500" />
+                             <span>চাল ও তেল</span>
+                           </label>
+                           <label className="flex items-center gap-1.5 cursor-pointer">
+                             <input type="checkbox" className="rounded border-gray-300 text-rose-600 focus:ring-rose-500" />
+                             <span>মাছ / মাংস</span>
+                           </label>
+                           <label className="flex items-center gap-1.5 cursor-pointer">
+                             <input type="checkbox" className="rounded border-gray-300 text-rose-600 focus:ring-rose-500" />
+                             <span>তরকারি ও সবজি</span>
+                           </label>
+                           <label className="flex items-center gap-1.5 cursor-pointer">
+                             <input type="checkbox" className="rounded border-gray-300 text-rose-600 focus:ring-rose-500" />
+                             <span>মশলা ও পেঁয়াজ</span>
+                           </label>
+                         </div>
+                       </div>
+                     </div>
+                   );
+                 } else {
+                   return (
+                     <div className="text-center py-6 text-gray-400 text-xs font-bold bg-gray-50 rounded-2xl border border-gray-100/50">
+                       আজকে বাজার করার জন্য কারো দায়িত্ব নেই।
+                     </div>
+                   );
+                 }
+               })()}
+             </div>
           </div>
 
           {/* Leaderboard Achievements Widget */}

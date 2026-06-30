@@ -1083,4 +1083,49 @@ export async function createNotice(title: string, content: string, adminUserId: 
   }
 }
 
+export async function deleteNotice(noticeId: string, adminUserId: string) {
+  try {
+    await connectToDatabase();
+
+    const admin = await User.findById(adminUserId);
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    await Notice.findByIdAndDelete(noticeId);
+
+    revalidatePath('/', 'layout');
+    revalidatePath('/notice');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateNotice(noticeId: string, title: string, content: string, adminUserId: string) {
+  try {
+    await connectToDatabase();
+
+    const admin = await User.findById(adminUserId);
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const notice = await Notice.findById(noticeId);
+    if (!notice) {
+      return { success: false, error: 'Notice not found.' };
+    }
+
+    notice.title = title;
+    notice.content = content;
+    await notice.save();
+
+    revalidatePath('/', 'layout');
+    revalidatePath('/notice');
+    return { success: true, notice: JSON.parse(JSON.stringify(notice)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 
