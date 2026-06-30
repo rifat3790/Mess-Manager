@@ -11,6 +11,8 @@ import { createNotification } from "./notificationActions";
 import mongoose from "mongoose";
 import MealRequest from "@/models/MealRequest";
 import { revalidatePath } from "next/cache";
+import Notice from "@/models/Notice";
+import Menu from "@/models/Menu";
 
 export async function addMeal(monthId: string, userId: string, date: Date, mealCount: number) {
   try {
@@ -973,6 +975,109 @@ export async function rejectMealRequest(requestId: string, adminUserId: string) 
 
     revalidatePath('/', 'layout');
     return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getTodayMenu() {
+  try {
+    await connectToDatabase();
+    
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    let menu = await Menu.findOne({
+      date: { $gte: todayStart, $lte: todayEnd }
+    });
+
+    if (!menu) {
+      return { success: true, menu: { breakfast: '', lunch: '', dinner: '', date: todayStart } };
+    }
+
+    return { success: true, menu: JSON.parse(JSON.stringify(menu)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateTodayMenu(breakfast: string, lunch: string, dinner: string, adminUserId: string) {
+  try {
+    await connectToDatabase();
+
+    const admin = await User.findById(adminUserId);
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    let menu = await Menu.findOne({
+      date: { $gte: todayStart, $lte: todayEnd }
+    });
+
+    if (menu) {
+      menu.breakfast = breakfast;
+      menu.lunch = lunch;
+      menu.dinner = dinner;
+      await menu.save();
+    } else {
+      menu = await Menu.create({
+        date: todayStart,
+        breakfast,
+        lunch,
+        dinner
+      });
+    }
+
+    await createNotification("আজকের মেনু আপডেট করা হয়েছে", `আজকের খাবারের মেনু আপডেট করা হয়েছে (সকাল: ${breakfast || 'নাই'}, দুপুর: ${lunch || 'নাই'}, রাত: ${dinner || 'নাই'})।`);
+
+    revalidatePath('/', 'layout');
+    return { success: true, menu: JSON.parse(JSON.stringify(menu)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getLatestNotices() {
+  try {
+    await connectToDatabase();
+
+    const notices = await Notice.find()
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate('createdBy', 'name role');
+
+    return { success: true, notices: JSON.parse(JSON.stringify(notices)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function createNotice(title: string, content: string, adminUserId: string) {
+  try {
+    await connectToDatabase();
+
+    const admin = await User.findById(adminUserId);
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const notice = await Notice.create({
+      title,
+      content,
+      createdBy: adminUserId
+    });
+
+    await createNotification("মেসে নতুন নোটিশ দেওয়া হয়েছে", `শিরোনাম: ${title}`);
+
+    revalidatePath('/', 'layout');
+    return { success: true, notice: JSON.parse(JSON.stringify(notice)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

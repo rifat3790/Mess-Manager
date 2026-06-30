@@ -24,7 +24,11 @@ import {
   Sparkles,
   Filter,
   Check,
-  X
+  X,
+  Bell,
+  ChefHat,
+  Bookmark,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -37,7 +41,11 @@ import {
   createOrUpdateMealRequest,
   getPendingMealRequests,
   approveMealRequest,
-  rejectMealRequest
+  rejectMealRequest,
+  getTodayMenu,
+  updateTodayMenu,
+  getLatestNotices,
+  createNotice
 } from './actions/dataActions';
 import { getBazaarSchedules } from './actions/bazaarActions';
 import { useRouter } from 'next/navigation';
@@ -65,6 +73,21 @@ export default function Home() {
   // Table Search and Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"All" | "Positive" | "Negative" | "Manager" | "Member">("All");
+
+  // Today's Menu state
+  const [menu, setMenu] = useState<any>(null);
+  const [isEditingMenu, setIsEditingMenu] = useState(false);
+  const [menuBreakfast, setMenuBreakfast] = useState('');
+  const [menuLunch, setMenuLunch] = useState('');
+  const [menuDinner, setMenuDinner] = useState('');
+  const [menuSubmitLoading, setMenuSubmitLoading] = useState(false);
+
+  // Notice Board state
+  const [notices, setNotices] = useState<any[]>([]);
+  const [isAddingNotice, setIsAddingNotice] = useState(false);
+  const [noticeTitle, setNoticeTitle] = useState('');
+  const [noticeContent, setNoticeContent] = useState('');
+  const [noticeSubmitLoading, setNoticeSubmitLoading] = useState(false);
 
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
@@ -134,10 +157,29 @@ export default function Home() {
     }
   }
 
+  async function fetchMenuAndNotices() {
+    if (mongoUser && mongoUser.role !== 'Pending') {
+      const [menuRes, noticesRes] = await Promise.all([
+        getTodayMenu(),
+        getLatestNotices()
+      ]);
+      if (menuRes.success && menuRes.menu) {
+        setMenu(menuRes.menu);
+        setMenuBreakfast(menuRes.menu.breakfast || '');
+        setMenuLunch(menuRes.menu.lunch || '');
+        setMenuDinner(menuRes.menu.dinner || '');
+      }
+      if (noticesRes.success) {
+        setNotices(noticesRes.notices || []);
+      }
+    }
+  }
+
   useEffect(() => {
     fetchDashboardData();
     fetchUserMeals();
     fetchPendingRequests();
+    fetchMenuAndNotices();
   }, [user, mongoUser]);
 
   // Initialize draft meals to 0 by default for standard member request input
@@ -225,7 +267,7 @@ export default function Home() {
           [dateStr]: { breakfast: 0, lunch: 0, dinner: 0 }
         }));
         toast.success("মিলের অনুরোধ সফলভাবে পাঠানো হয়েছে!");
-        fetchPendingRequests(); // refresh if we are also admin/manager (though they edit directly)
+        fetchPendingRequests();
       } else {
         toast.error(res.error || "অনুরোধ পাঠাতে ব্যর্থ হয়েছে।");
       }
@@ -275,6 +317,50 @@ export default function Home() {
       setRequestActionLoading(prev => ({ ...prev, [requestId]: false }));
     }
   };
+
+  // Handle Cooking Menu Save
+  const handleMenuSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mongoUser) return;
+    setMenuSubmitLoading(true);
+    try {
+      const res = await updateTodayMenu(menuBreakfast, menuLunch, menuDinner, mongoUser._id);
+      if (res.success) {
+        toast.success("মেনু সফলভাবে আপডেট হয়েছে!");
+        setIsEditingMenu(false);
+        fetchMenuAndNotices();
+      } else {
+        toast.error(res.error || "মেনু আপডেট করতে সমস্যা হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ভুল হয়েছে।");
+    } finally {
+      setMenuSubmitLoading(false);
+    }
+  };
+
+  // Handle Notice Post
+  const handleNoticeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!noticeTitle || !noticeContent || !mongoUser) return;
+    setNoticeSubmitLoading(true);
+    try {
+      const res = await createNotice(noticeTitle, noticeContent, mongoUser._id);
+      if (res.success) {
+        toast.success("নোটিশ সফলভাবে দেওয়া হয়েছে!");
+        setNoticeTitle('');
+        setNoticeContent('');
+        setIsAddingNotice(false);
+        fetchMenuAndNotices();
+      } else {
+        toast.error(res.error || "নোটিশ পোস্ট করতে সমস্যা হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ভুল হয়েছে।");
+    } finally {
+      setNoticeSubmitLoading(false);
+    }
+  };
   
   if (authLoading || dataLoading) {
     return (
@@ -287,7 +373,7 @@ export default function Home() {
 
   if (!user || !mongoUser) {
     return (
-      <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh] bg-white rounded-3xl p-8 border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+      <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh] bg-white rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
         <div suppressHydrationWarning className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
           <Wallet className="w-10 h-10 text-indigo-600" />
         </div>
@@ -302,7 +388,7 @@ export default function Home() {
 
   if (mongoUser.role === 'Pending') {
     return (
-      <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh] bg-white rounded-3xl p-8 border border-orange-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+      <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh] bg-white rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
         <div suppressHydrationWarning className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mb-6">
           <AlertCircle className="w-10 h-10 text-orange-500" />
         </div>
@@ -363,6 +449,21 @@ export default function Home() {
   else if (hour >= 17 && hour < 20) greeting = 'শুভ সন্ধ্যা';
   else if (hour >= 20 || hour < 5) greeting = 'শুভ রাত্রি';
 
+  // Budget spent health calculator
+  const spentPercentage = globalStats.totalDeposit > 0 ? (globalStats.totalExpense / globalStats.totalDeposit) * 100 : 0;
+  let healthStatus = "চমৎকার (Safe)";
+  let healthColor = "text-emerald-600 bg-emerald-50 border-emerald-100";
+  let progressColor = "bg-emerald-500";
+  if (spentPercentage > 70 && spentPercentage <= 90) {
+    healthStatus = "সতর্কতা (Warning)";
+    healthColor = "text-amber-600 bg-amber-50 border-amber-100";
+    progressColor = "bg-amber-500";
+  } else if (spentPercentage > 90) {
+    healthStatus = "বাজেট শেষ (Alert)";
+    healthColor = "text-rose-600 bg-rose-50 border-rose-100";
+    progressColor = "bg-rose-500";
+  }
+
   return (
     <div suppressHydrationWarning className="w-full space-y-8 pb-16">
       
@@ -378,10 +479,10 @@ export default function Home() {
         </div>
         
         <div className="flex items-center gap-3 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-           <button onClick={() => router.push('/chat')} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm hover:border-indigo-400 hover:text-indigo-600 transition-colors whitespace-nowrap">
+           <button onClick={() => router.push('/chat')} className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 font-bold rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:text-indigo-600 transition-colors whitespace-nowrap">
              <MessageSquare className="w-4 h-4 text-indigo-500" /> মেস চ্যাট
            </button>
-           <button onClick={() => router.push('/bazaar')} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm hover:border-emerald-400 hover:text-emerald-600 transition-colors whitespace-nowrap">
+           <button onClick={() => router.push('/bazaar')} className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 font-bold rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:text-emerald-600 transition-colors whitespace-nowrap">
              <Calendar className="w-4 h-4 text-emerald-500" /> বাজার শিডিউল
            </button>
            {isManagerOrAdmin && (
@@ -392,8 +493,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Global Month Statistics Card - Light Premium Theme */}
-      <div suppressHydrationWarning className="relative bg-gradient-to-br from-indigo-50/90 via-white/80 to-blue-50/90 text-gray-900 rounded-[2.5rem] p-6 md:p-8 border border-indigo-100/60 shadow-[0_8px_30px_rgb(99,102,241,0.05)] overflow-hidden">
+      {/* Global Month Statistics Card - Light Premium Theme with box shadow */}
+      <div suppressHydrationWarning className="relative bg-gradient-to-br from-indigo-50/90 via-white/80 to-blue-50/90 text-gray-900 rounded-[2.5rem] p-6 md:p-8 shadow-[0_12px_40px_rgb(99,102,241,0.06)] overflow-hidden">
         {/* Soft decorative blur shapes */}
         <div suppressHydrationWarning className="absolute -top-20 -left-20 w-60 h-60 bg-blue-100/55 rounded-full blur-3xl"></div>
         <div suppressHydrationWarning className="absolute -bottom-20 -right-20 w-60 h-60 bg-indigo-100/55 rounded-full blur-3xl"></div>
@@ -405,14 +506,14 @@ export default function Home() {
              </div>
              <div>
                <h1 className="text-2xl font-black tracking-tight text-gray-900">{messName || 'Mohakhali Mess'}</h1>
-               <p className="text-xs text-indigo-600 font-bold bg-indigo-50/80 border border-indigo-100/50 px-2.5 py-0.5 rounded-full mt-1 inline-block">
+               <p className="text-xs text-indigo-600 font-bold bg-indigo-50/80 px-2.5 py-0.5 rounded-full mt-1 inline-block">
                  {globalStats.monthName === 'কোনো চলমান মাস নেই' ? 'কোনো চলমান মাস নেই' : `${globalStats.monthName} (চলমান মাস)`}
                </p>
              </div>
           </div>
           <button 
             onClick={() => router.push('/report/single')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 text-indigo-600 font-bold rounded-xl border border-gray-200/80 transition-all text-xs shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 text-indigo-600 font-bold rounded-xl transition-all text-xs shadow-[0_8px_30px_rgb(0,0,0,0.03)]"
           >
             <FileText className="w-4 h-4" />
             বিস্তারিত রিপোর্ট
@@ -420,41 +521,41 @@ export default function Home() {
         </div>
 
         <div suppressHydrationWarning className="relative z-10 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
-          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div suppressHydrationWarning className="bg-white/85 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
              <p className="text-xs font-bold text-emerald-600 mb-1 flex items-center gap-1"><Wallet className="w-3.5 h-3.5"/> ব্যালেন্স</p>
              <p className="text-lg font-black text-gray-900">{globalStats.balance.toFixed(1)} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div suppressHydrationWarning className="bg-white/85 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
              <p className="text-xs font-bold text-blue-600 mb-1 flex items-center gap-1"><ArrowUpRight className="w-3.5 h-3.5"/> মোট জমা</p>
              <p className="text-lg font-black text-gray-900">{globalStats.totalDeposit.toFixed(0)} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div suppressHydrationWarning className="bg-white/85 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
              <p className="text-xs font-bold text-amber-600 mb-1 flex items-center gap-1"><Utensils className="w-3.5 h-3.5"/> মোট মিল</p>
              <p className="text-lg font-black text-gray-900">{globalStats.totalMeals.toFixed(1)}</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div suppressHydrationWarning className="bg-white/85 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
              <p className="text-xs font-bold text-rose-600 mb-1 flex items-center gap-1"><TrendingDown className="w-3.5 h-3.5"/> মিল খরচ</p>
              <p className="text-lg font-black text-gray-900">{globalStats.mealExpenses.toFixed(0)} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div suppressHydrationWarning className="bg-white/85 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
              <p className="text-xs font-bold text-indigo-600 mb-1 flex items-center gap-1"><Receipt className="w-3.5 h-3.5"/> মিল রেট</p>
              <p className="text-lg font-black text-gray-900">{globalStats.mealRate.toFixed(2)} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div suppressHydrationWarning className="bg-white/85 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
              <p className="text-xs font-bold text-purple-600 mb-1 flex items-center gap-1"><ShoppingBag className="w-3.5 h-3.5"/> একক খরচ</p>
              <p className="text-lg font-black text-gray-900">{globalStats.singleExpenses?.toFixed(0) || '0'} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div suppressHydrationWarning className="bg-white/85 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
              <p className="text-xs font-bold text-teal-600 mb-1 flex items-center gap-1"><Users className="w-3.5 h-3.5"/> যৌথ খরচ</p>
              <p className="text-lg font-black text-gray-900">{globalStats.jointExpenses?.toFixed(0) || '0'} ৳</p>
           </div>
         </div>
       </div>
 
-      {/* Main Grid: My Stats, Quick Meal, Bazaar Schedule */}
+      {/* Main Grid: My Stats, Menu, Quick Meal, Bazaar Schedule */}
       <div suppressHydrationWarning className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* Column 1: My Stats & Quick Meal (Takes 8 columns) */}
+        {/* Column 1: My Stats, Menu & Quick Meal (Takes 8 columns) */}
         <div suppressHydrationWarning className="lg:col-span-8 space-y-8">
           
           {/* My Stats Widget */}
@@ -466,7 +567,7 @@ export default function Home() {
             
             <div suppressHydrationWarning className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {/* Meals */}
-              <div suppressHydrationWarning className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div suppressHydrationWarning className="bg-white rounded-2xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative overflow-hidden group hover:shadow-md transition-shadow">
                   <div suppressHydrationWarning className="absolute top-0 right-0 w-16 h-16 bg-blue-50/50 rounded-bl-full -mr-2 -mt-2"></div>
                   <div suppressHydrationWarning className="relative z-10">
                     <div className="w-9 h-9 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center mb-4">
@@ -478,7 +579,7 @@ export default function Home() {
               </div>
 
               {/* Deposit */}
-              <div suppressHydrationWarning className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div suppressHydrationWarning className="bg-white rounded-2xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative overflow-hidden group hover:shadow-md transition-shadow">
                   <div suppressHydrationWarning className="absolute top-0 right-0 w-16 h-16 bg-emerald-50/50 rounded-bl-full -mr-2 -mt-2"></div>
                   <div suppressHydrationWarning className="relative z-10">
                     <div className="w-9 h-9 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center mb-4">
@@ -490,7 +591,7 @@ export default function Home() {
               </div>
 
               {/* Expense */}
-              <div suppressHydrationWarning className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div suppressHydrationWarning className="bg-white rounded-2xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative overflow-hidden group hover:shadow-md transition-shadow">
                   <div suppressHydrationWarning className="absolute top-0 right-0 w-16 h-16 bg-rose-50/50 rounded-bl-full -mr-2 -mt-2"></div>
                   <div suppressHydrationWarning className="relative z-10">
                     <div className="w-9 h-9 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center mb-4">
@@ -502,7 +603,7 @@ export default function Home() {
               </div>
 
               {/* Balance */}
-              <div suppressHydrationWarning className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div suppressHydrationWarning className="bg-white rounded-2xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative overflow-hidden group hover:shadow-md transition-shadow">
                   <div suppressHydrationWarning className="absolute top-0 right-0 w-16 h-16 bg-amber-50/50 rounded-bl-full -mr-2 -mt-2"></div>
                   <div suppressHydrationWarning className="relative z-10">
                     <div className="w-9 h-9 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center mb-4">
@@ -517,9 +618,104 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Today's Cooking Menu Widget (Unique and Mess-Related Feature) */}
+          <div suppressHydrationWarning className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] rounded-3xl p-6 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-4 border-b border-gray-50 pb-3">
+              <div className="flex items-center gap-2">
+                <ChefHat className="w-5 h-5 text-orange-500 animate-pulse" />
+                <h3 className="font-extrabold text-gray-900 text-lg">আজকের রান্নার মেনু (Cooking Menu)</h3>
+              </div>
+              {isManagerOrAdmin && !isEditingMenu && (
+                <button
+                  onClick={() => setIsEditingMenu(true)}
+                  className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl hover:bg-indigo-100 transition-colors"
+                >
+                  মেনু আপডেট করুন
+                </button>
+              )}
+            </div>
+
+            {isEditingMenu ? (
+              <form onSubmit={handleMenuSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-500 mb-1 uppercase">🍳 সকাল</label>
+                    <input
+                      type="text"
+                      value={menuBreakfast}
+                      onChange={(e) => setMenuBreakfast(e.target.value)}
+                      placeholder="যেমন: ডিম খিচুড়ি"
+                      className="w-full px-3 py-2 bg-gray-50 rounded-xl text-xs font-bold border border-gray-150 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-500 mb-1 uppercase">🍛 দুপুর</label>
+                    <input
+                      type="text"
+                      value={menuLunch}
+                      onChange={(e) => setMenuLunch(e.target.value)}
+                      placeholder="যেমন: মুরগির মাংস, ডাল"
+                      className="w-full px-3 py-2 bg-gray-50 rounded-xl text-xs font-bold border border-gray-150 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-500 mb-1 uppercase">🍲 রাত</label>
+                    <input
+                      type="text"
+                      value={menuDinner}
+                      onChange={(e) => setMenuDinner(e.target.value)}
+                      placeholder="যেমন: মাছের ঝোল, আলুভর্তা"
+                      className="w-full px-3 py-2 bg-gray-50 rounded-xl text-xs font-bold border border-gray-150 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 text-xs font-bold pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsEditingMenu(false); fetchMenuAndNotices(); }}
+                    className="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl transition-colors"
+                  >
+                    বাতিল
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={menuSubmitLoading}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors flex items-center gap-1.5 shadow-md shadow-indigo-100"
+                  >
+                    {menuSubmitLoading ? 'আপডেট হচ্ছে...' : 'সংরক্ষণ করুন'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-orange-50/30 p-3.5 rounded-2xl border border-orange-50 flex items-start gap-3">
+                  <span className="text-xl">🍳</span>
+                  <div>
+                    <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">সকালের মেনু</p>
+                    <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.breakfast || 'আপডেট করা হয়নি'}</p>
+                  </div>
+                </div>
+                <div className="bg-blue-50/30 p-3.5 rounded-2xl border border-blue-50 flex items-start gap-3">
+                  <span className="text-xl">🍛</span>
+                  <div>
+                    <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">দুপুরের মেনু</p>
+                    <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.lunch || 'আপডেট করা হয়নি'}</p>
+                  </div>
+                </div>
+                <div className="bg-emerald-50/30 p-3.5 rounded-2xl border border-emerald-50 flex items-start gap-3">
+                  <span className="text-xl">🍲</span>
+                  <div>
+                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">রাতের মেনু</p>
+                    <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.dinner || 'আপডেট করা হয়নি'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Quick Meal Planner / Requester */}
-          <div suppressHydrationWarning className="bg-white border border-gray-150 shadow-sm rounded-3xl p-6 relative overflow-hidden">
-            <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+          <div suppressHydrationWarning className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] rounded-3xl p-6 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-4 border-b border-gray-50 pb-3">
               <div>
                 <h3 className="font-extrabold text-gray-900 text-lg flex items-center gap-2">
                   <Utensils className="w-5 h-5 text-orange-500" />
@@ -538,7 +734,7 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
                 
                 {/* Today Column */}
-                <div className="bg-gray-50/60 rounded-2xl p-4 border border-gray-100 flex flex-col justify-between">
+                <div className="bg-gray-50/60 rounded-2xl p-4 flex flex-col justify-between">
                   <div>
                     <h4 className="font-bold text-gray-800 text-sm mb-3 flex justify-between items-center">
                       <span>আজকের মিল (Today)</span>
@@ -557,7 +753,7 @@ export default function Home() {
 
                     <div className="space-y-3">
                       {/* Breakfast */}
-                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm">
                         <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🥚 সকালের খাবার</span>
                         <div className="flex items-center gap-3">
                           <button 
@@ -591,7 +787,7 @@ export default function Home() {
                       </div>
 
                       {/* Lunch */}
-                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm">
                         <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍛 দুপুরের খাবার</span>
                         <div className="flex items-center gap-3">
                           <button 
@@ -625,7 +821,7 @@ export default function Home() {
                       </div>
 
                       {/* Dinner */}
-                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm">
                         <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍲 রাতের খাবার</span>
                         <div className="flex items-center gap-3">
                           <button 
@@ -657,10 +853,10 @@ export default function Home() {
                           </button>
                         </div>
                       </div>
-                      
+
                       {/* Show current actual meal count for standard member */}
                       {!isManagerOrAdmin && (
-                        <div className="mt-3 text-[11px] font-bold text-gray-500 bg-white p-2.5 rounded-xl border border-gray-100 flex justify-between items-center">
+                        <div className="mt-3 text-[11px] font-bold text-gray-500 bg-white p-2.5 rounded-xl flex justify-between items-center shadow-[0_4px_20px_rgb(0,0,0,0.01)]">
                           <span>বর্তমান মিল:</span>
                           <span className="text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-md">
                             সকাল: {myMeals.today.breakfast}, দুপুর: {myMeals.today.lunch}, রাত: {myMeals.today.dinner}
@@ -669,7 +865,7 @@ export default function Home() {
                       )}
                       {/* Show pending request if exists */}
                       {!isManagerOrAdmin && myMeals.pendingToday && (
-                        <div className="mt-2 text-[11px] font-extrabold text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100/50 flex justify-between items-center animate-pulse">
+                        <div className="mt-2 text-[11px] font-extrabold text-amber-700 bg-amber-50 p-2.5 rounded-xl flex justify-between items-center animate-pulse">
                           <span>পেন্ডিং অনুরোধ:</span>
                           <span>
                             সকাল: {myMeals.pendingToday.breakfast}, দুপুর: {myMeals.pendingToday.lunch}, রাত: {myMeals.pendingToday.dinner}
@@ -697,7 +893,7 @@ export default function Home() {
                 </div>
 
                 {/* Tomorrow Column */}
-                <div className="bg-gray-50/60 rounded-2xl p-4 border border-gray-100 flex flex-col justify-between">
+                <div className="bg-gray-50/60 rounded-2xl p-4 flex flex-col justify-between">
                   <div>
                     <h4 className="font-bold text-gray-800 text-sm mb-3 flex justify-between items-center">
                       <span>আগামীকালের মিল (Tomorrow)</span>
@@ -716,7 +912,7 @@ export default function Home() {
 
                     <div className="space-y-3">
                       {/* Breakfast */}
-                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm">
                         <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🥚 সকালের খাবার</span>
                         <div className="flex items-center gap-3">
                           <button 
@@ -750,7 +946,7 @@ export default function Home() {
                       </div>
 
                       {/* Lunch */}
-                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm">
                         <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍛 দুপুরের খাবার</span>
                         <div className="flex items-center gap-3">
                           <button 
@@ -784,7 +980,7 @@ export default function Home() {
                       </div>
 
                       {/* Dinner */}
-                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm">
                         <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍲 রাতের খাবার</span>
                         <div className="flex items-center gap-3">
                           <button 
@@ -816,10 +1012,10 @@ export default function Home() {
                           </button>
                         </div>
                       </div>
-                      
+
                       {/* Show current actual meal count for standard member */}
                       {!isManagerOrAdmin && (
-                        <div className="mt-3 text-[11px] font-bold text-gray-500 bg-white p-2.5 rounded-xl border border-gray-100 flex justify-between items-center">
+                        <div className="mt-3 text-[11px] font-bold text-gray-500 bg-white p-2.5 rounded-xl flex justify-between items-center shadow-[0_4px_20px_rgb(0,0,0,0.01)]">
                           <span>বর্তমান মিল:</span>
                           <span className="text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-md">
                             সকাল: {myMeals.tomorrow.breakfast}, দুপুর: {myMeals.tomorrow.lunch}, রাত: {myMeals.tomorrow.dinner}
@@ -828,7 +1024,7 @@ export default function Home() {
                       )}
                       {/* Show pending request if exists */}
                       {!isManagerOrAdmin && myMeals.pendingTomorrow && (
-                        <div className="mt-2 text-[11px] font-extrabold text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-100/50 flex justify-between items-center animate-pulse">
+                        <div className="mt-2 text-[11px] font-extrabold text-amber-700 bg-amber-50 p-2.5 rounded-xl flex justify-between items-center animate-pulse">
                           <span>পেন্ডিং অনুরোধ:</span>
                           <span>
                             সকাল: {myMeals.pendingTomorrow.breakfast}, দুপুর: {myMeals.pendingTomorrow.lunch}, রাত: {myMeals.pendingTomorrow.dinner}
@@ -863,7 +1059,7 @@ export default function Home() {
 
           {/* Pending Meal Requests Panel (Only visible to Managers/Admins) */}
           {isManagerOrAdmin && pendingRequests.length > 0 && (
-            <div suppressHydrationWarning className="bg-white border border-amber-100 shadow-sm rounded-3xl p-6 relative overflow-hidden">
+            <div suppressHydrationWarning className="bg-white shadow-[0_8px_30px_rgb(245,158,11,0.04)] rounded-3xl p-6 relative overflow-hidden">
               <div className="flex items-center gap-2 mb-4 border-b border-amber-50 pb-3">
                 <Crown className="w-5 h-5 text-amber-500" />
                 <h3 className="font-extrabold text-gray-900 text-lg">মেম্বারদের মিল পরিবর্তনের অনুরোধ ({pendingRequests.length})</h3>
@@ -912,11 +1108,11 @@ export default function Home() {
           )}
         </div>
 
-        {/* Column 2: Bazaar Date & Achievements (Takes 4 columns) */}
+        {/* Column 2: Bazaar Date, Budget Status, Notice Board & Achievements (4 cols) */}
         <div suppressHydrationWarning className="lg:col-span-4 space-y-8 flex flex-col">
           
           {/* Bazaar Date Card */}
-          <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-sm border border-gray-150 flex flex-col relative overflow-hidden">
+          <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
              <div suppressHydrationWarning className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
                 <Calendar className="w-24 h-24 text-indigo-600" />
              </div>
@@ -935,7 +1131,7 @@ export default function Home() {
                    return (
                      <div className="mb-4">
                        <span className="text-xs font-semibold text-gray-400 block mb-1.5">বাজার স্ট্যাটাস</span>
-                       <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold px-4 py-3.5 rounded-xl text-sm flex items-center gap-2">
+                       <div className="bg-emerald-50 text-emerald-700 font-bold px-4 py-3.5 rounded-xl text-sm flex items-center gap-2">
                          <CheckCircle2 className="w-4 h-4" /> 
                          এই মাসের বাজার সম্পন্ন হয়েছে!
                        </div>
@@ -945,7 +1141,7 @@ export default function Home() {
                    return (
                      <div className="mb-4">
                        <span className="text-xs font-semibold text-gray-400 block mb-1.5">আপনার বাজার তারিখ</span>
-                       <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 text-indigo-900 font-bold px-4 py-3.5 rounded-xl text-sm">
+                       <div className="bg-gradient-to-r from-indigo-50 to-blue-50 text-indigo-900 font-bold px-4 py-3.5 rounded-xl text-sm">
                          {new Date(mySchedule.fromDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} 
                          {' - '} 
                          {new Date(mySchedule.toDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
@@ -956,14 +1152,14 @@ export default function Home() {
                    return (
                      <div className="mb-4">
                        <span className="text-xs font-semibold text-amber-600 block mb-1.5">রিকোয়েস্ট পেন্ডিং</span>
-                       <div className="bg-amber-50 border border-amber-200 text-amber-800 font-bold px-4 py-3.5 rounded-xl text-sm">
+                       <div className="bg-amber-50 text-amber-800 font-bold px-4 py-3.5 rounded-xl text-sm">
                          {new Date(myPending.fromDate).toLocaleDateString('en-GB')} - {new Date(myPending.toDate).toLocaleDateString('en-GB')}
                        </div>
                      </div>
                    );
                  } else {
                    return (
-                     <div className="mb-4 text-sm text-gray-500 font-medium bg-gray-50 p-4 rounded-xl border border-gray-100">
+                     <div className="mb-4 text-sm text-gray-500 font-medium bg-gray-50 p-4 rounded-xl">
                        কোনো বাজারের ডেট সেট করা নেই
                      </div>
                    );
@@ -974,7 +1170,7 @@ export default function Home() {
                  {isManagerOrAdmin ? (
                    <button 
                      onClick={() => router.push('/bazaar')}
-                     className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 text-sm shadow-md"
+                     className="w-full py-3 bg-gray-955 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 text-sm shadow-md"
                    >
                      <Calendar className="w-4 h-4" />
                      শিডিউল ম্যানেজ করুন
@@ -992,8 +1188,104 @@ export default function Home() {
              </div>
           </div>
 
+          {/* Mess Budget Health Card (Unique Mess Feature) */}
+          <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                <TrendingDown className="w-4 h-4 text-rose-500" />
+                মেস বাজেট খরচ অনুপাত
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${healthColor}`}>{healthStatus}</span>
+            </div>
+            
+            <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
+              <div className={`h-full ${progressColor} transition-all duration-500`} style={{ width: `${Math.min(100, spentPercentage)}%` }}></div>
+            </div>
+            
+            <div className="flex justify-between items-center text-xs font-bold text-gray-500">
+              <span>খরচ হয়েছে: {spentPercentage.toFixed(0)}%</span>
+              <span>অবশিষ্ট: {Math.max(0, 100 - spentPercentage).toFixed(0)}%</span>
+            </div>
+          </div>
+
+          {/* Notice Board Card (Unique Notice board / Announcements Feature) */}
+          <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
+            <div className="flex items-center justify-between mb-4 border-b border-gray-50 pb-3">
+              <h3 className="font-extrabold text-gray-955 text-base flex items-center gap-2">
+                <Bell className="w-4 h-4 text-indigo-500 animate-swing" />
+                মেস নোটিশ বোর্ড (Announcements)
+              </h3>
+              {isManagerOrAdmin && !isAddingNotice && (
+                <button
+                  onClick={() => setIsAddingNotice(true)}
+                  className="p-1 bg-indigo-55 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {isAddingNotice ? (
+              <form onSubmit={handleNoticeSubmit} className="space-y-3">
+                <input
+                  type="text"
+                  required
+                  value={noticeTitle}
+                  onChange={(e) => setNoticeTitle(e.target.value)}
+                  placeholder="নোটিশের শিরোনাম"
+                  className="w-full px-3 py-2 bg-gray-50 rounded-xl text-xs font-bold border border-gray-150 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                />
+                <textarea
+                  required
+                  value={noticeContent}
+                  onChange={(e) => setNoticeContent(e.target.value)}
+                  placeholder="বিস্তারিত বিবরণ..."
+                  rows={3}
+                  className="w-full px-3 py-2 bg-gray-50 rounded-xl text-xs font-bold border border-gray-150 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none resize-none"
+                />
+                <div className="flex justify-end gap-2 text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => { setIsAddingNotice(false); setNoticeTitle(''); setNoticeContent(''); }}
+                    className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-lg transition-colors"
+                  >
+                    বাতিল
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={noticeSubmitLoading}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center gap-1 shadow-sm"
+                  >
+                    {noticeSubmitLoading ? 'পোস্ট হচ্ছে...' : 'পোস্ট করুন'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-3.5 max-h-[220px] overflow-y-auto scrollbar-thin">
+                {notices.length === 0 ? (
+                  <div className="text-center text-gray-400 text-xs font-bold py-6">কোনো নোটিশ দেওয়া হয়নি।</div>
+                ) : (
+                  notices.map((n) => (
+                    <div key={n._id} className="bg-gray-50/50 p-3 rounded-2xl border border-gray-100/50 space-y-1 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-extrabold text-xs text-gray-900 capitalize">{n.title}</span>
+                        <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                          {new Date(n.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                        </span>
+                      </div>
+                      <p className="text-[11px] font-semibold text-gray-600 leading-relaxed">{n.content}</p>
+                      <p className="text-[9px] font-bold text-gray-400 text-right">
+                        পোস্ট করেছেন: {n.createdBy?.name.split(' ')[0]} ({n.createdBy?.role})
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Leaderboard Achievements Widget */}
-          <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-sm border border-gray-150 flex flex-col relative overflow-hidden">
+          <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
             <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
               <Crown className="w-5 h-5 text-amber-500" />
               মেস অ্যাচিভমেন্টস (চলমান মাস)
@@ -1069,7 +1361,7 @@ export default function Home() {
          </div>
          
          {/* Search & Filters toolbar */}
-         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-white p-4 rounded-2xl border border-gray-150 shadow-sm">
+         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-white p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
            {/* Search Input */}
            <div className="relative w-full sm:w-72">
              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1106,7 +1398,7 @@ export default function Home() {
            </div>
          </div>
          
-         <div suppressHydrationWarning className="bg-white rounded-3xl shadow-sm border border-gray-150 overflow-hidden">
+         <div suppressHydrationWarning className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.03)] overflow-hidden">
            <div suppressHydrationWarning className="overflow-x-auto">
              <table className="w-full text-left border-collapse">
                <thead>
