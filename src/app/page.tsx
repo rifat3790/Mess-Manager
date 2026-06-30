@@ -90,7 +90,8 @@ export default function Home() {
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeContent, setNoticeContent] = useState('');
   const [noticeSubmitLoading, setNoticeSubmitLoading] = useState(false);
-  const [estDailyMeals, setEstDailyMeals] = useState(2);
+  const [estDailyMeals, setEstDailyMeals] = useState<number>(2);
+  const [customMealRate, setCustomMealRate] = useState<string>('');
   const [showBalanceModal, setShowBalanceModal] = useState(false);
 
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
@@ -113,6 +114,7 @@ export default function Home() {
     if (res.success) {
       if (res.stats) {
         setGlobalStats(res.stats);
+        setCustomMealRate(res.stats.mealRate ? res.stats.mealRate.toFixed(2) : '40.00');
         setAllMembers(res.members || []);
         const me = res.members.find((m: any) => m._id === mongoUser._id);
         if (me) {
@@ -1140,33 +1142,69 @@ export default function Home() {
             </div>
 
             <div className="space-y-4">
+              {/* Row 1: Daily Meals (Inputs + Buttons) */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/60 p-4 rounded-2xl">
                 <div>
                   <label className="block text-xs font-bold text-gray-700">প্রতিদিনের আনুমানিক মিল সংখ্যা:</label>
                   <p className="text-[10px] text-gray-400 font-semibold mt-0.5">১ দিনে আপনি গড়ে কয়টি মিল খাবেন?</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-gray-150 shadow-sm">
                   <button 
-                    onClick={() => setEstDailyMeals(prev => Math.max(0.5, prev - 0.5))}
-                    className="w-8 h-8 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl flex items-center justify-center font-bold text-gray-600 transition-colors text-sm shadow-sm"
+                    type="button"
+                    onClick={() => setEstDailyMeals(prev => Math.max(0, parseFloat((prev - 0.5).toFixed(1))))}
+                    className="w-7 h-7 hover:bg-gray-55 rounded-lg flex items-center justify-center font-black text-gray-650 text-xs transition-colors"
                   >
                     -
                   </button>
-                  <span className="text-base font-black text-gray-900 w-8 text-center">{estDailyMeals.toFixed(1)}</span>
+                  <input 
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="10"
+                    value={estDailyMeals === 0 ? '' : estDailyMeals}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setEstDailyMeals(isNaN(val) ? 0 : val);
+                    }}
+                    className="w-12 text-center text-sm font-black text-gray-900 focus:outline-none border-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
                   <button 
-                    onClick={() => setEstDailyMeals(prev => Math.min(5, prev + 0.5))}
-                    className="w-8 h-8 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl flex items-center justify-center font-bold text-gray-600 transition-colors text-sm shadow-sm"
+                    type="button"
+                    onClick={() => setEstDailyMeals(prev => Math.min(10, parseFloat((prev + 0.5).toFixed(1))))}
+                    className="w-7 h-7 hover:bg-gray-55 rounded-lg flex items-center justify-center font-black text-gray-655 text-xs transition-colors"
                   >
                     +
                   </button>
                 </div>
               </div>
 
+              {/* Row 2: Custom Meal Rate Input */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/60 p-4 rounded-2xl">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700">মিল রেট (Meal Rate):</label>
+                  <p className="text-[10px] text-gray-400 font-semibold mt-0.5">হিসেব করার জন্য মিল রেট পরিবর্তন করুন</p>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-gray-150 shadow-sm">
+                  <input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder={`${globalStats.mealRate?.toFixed(2) || '40.00'}`}
+                    value={customMealRate}
+                    onChange={(e) => setCustomMealRate(e.target.value)}
+                    className="w-20 text-right text-xs font-black text-gray-900 focus:outline-none border-none"
+                  />
+                  <span className="text-xs font-bold text-gray-400">৳</span>
+                </div>
+              </div>
+
               {/* Live calculations */}
               {(() => {
                 const liveRate = globalStats.mealRate || 40;
+                const parsedRate = parseFloat(customMealRate);
+                const rateToUse = isNaN(parsedRate) || parsedRate <= 0 ? liveRate : parsedRate;
                 const monthlyMeals = estDailyMeals * 30;
-                const estimatedCost = monthlyMeals * liveRate;
+                const estimatedCost = monthlyMeals * rateToUse;
                 const currentDeposit = myStats.deposit || 0;
                 const extraNeeded = Math.max(0, estimatedCost - currentDeposit);
                 const isSufficient = currentDeposit >= estimatedCost;
@@ -1176,7 +1214,7 @@ export default function Home() {
                     <div className="bg-indigo-50/20 border border-indigo-50/50 p-3.5 rounded-2xl">
                       <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider">আনুমানিক মাসিক খরচ</p>
                       <p className="text-xl font-black text-gray-900 mt-1">{estimatedCost.toFixed(0)} ৳</p>
-                      <p className="text-[10px] font-bold text-gray-400 mt-0.5">মিল রেট: {liveRate.toFixed(2)} ৳ হিসেবে</p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-0.5">মিল রেট: {rateToUse.toFixed(2)} ৳ হিসেবে</p>
                     </div>
 
                     <div className={cn(
