@@ -115,7 +115,6 @@ export default function DepositPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">টাকার পরিমাণ</label>
                 <input
                   type="number"
-                  min="1"
                   required
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}

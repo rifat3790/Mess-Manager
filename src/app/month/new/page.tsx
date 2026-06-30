@@ -12,6 +12,7 @@ export default function NewMonthPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [carryOverBalance, setCarryOverBalance] = useState(false);
 
   if (mongoUser?.role !== 'Super Admin' && mongoUser?.role !== 'Manager') {
     return <div className="p-6 text-center text-red-500">You do not have permission to access this page.</div>;
@@ -24,11 +25,12 @@ export default function NewMonthPage() {
     setError('');
 
     try {
-      const res = await createNewMonthSheet(monthName, new Date(startDate));
+      const res = await createNewMonthSheet(monthName, new Date(startDate), carryOverBalance);
       if (res.success) {
         setMessage(`সফলভাবে "${monthName}" মাস তৈরি করা হয়েছে এবং গুগল শিটে নতুন ট্যাব যুক্ত হয়েছে!`);
         setMonthName('');
         setStartDate('');
+        setCarryOverBalance(false);
       } else {
         setError(res.error || 'মাস তৈরি করতে সমস্যা হয়েছে।');
       }
@@ -75,6 +77,22 @@ export default function NewMonthPage() {
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none"
               />
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-150">
+              <div>
+                <label className="block text-sm font-bold text-gray-700">ব্যালেন্স ক্যারি-ওভার করুন</label>
+                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">সব মেম্বারের আগের মাসের অবশিষ্ট ব্যালেন্স নতুন মাসে স্থানান্তর করতে চান?</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={carryOverBalance} 
+                  onChange={(e) => setCarryOverBalance(e.target.checked)} 
+                  className="sr-only peer" 
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+              </label>
             </div>
             
             <button

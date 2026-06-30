@@ -3,8 +3,12 @@
 import { getGoogleSheet } from "@/lib/google-sheets";
 import connectToDatabase from "@/lib/mongoose";
 import Month from "@/models/Month";
+import User from "@/models/User";
+import Meal from "@/models/Meal";
+import Expense from "@/models/Expense";
+import Deposit from "@/models/Deposit";
 
-export async function createNewMonthSheet(monthName: string, startDate: Date) {
+export async function createNewMonthSheet(monthName: string, startDate: Date, carryOverBalance: boolean = false) {
   try {
     await connectToDatabase();
     const doc = await getGoogleSheet();
@@ -30,12 +34,84 @@ export async function createNewMonthSheet(monthName: string, startDate: Date) {
       await sheet.saveUpdatedCells();
     }
 
+    // 1. Calculate balances from previous active month if requested
+    const carryOverList: { userId: string; balance: number; userName: string }[] = [];
+    if (carryOverBalance) {
+      const prevActiveMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+      if (prevActiveMonth) {
+        const users = await User.find({ role: { $ne: 'Pending' } });
+        const meals = await Meal.find({ monthId: prevActiveMonth._id });
+        const expenses = await Expense.find({ monthId: prevActiveMonth._id });
+        const deposits = await Deposit.find({ monthId: prevActiveMonth._id });
+
+        const totalMeals = meals.reduce((sum, m) => sum + m.mealCount, 0);
+        const mealExpenses = expenses.filter(e => e.type === 'Meal').reduce((sum, e) => sum + e.amount, 0);
+        const mealRate = totalMeals > 0 ? mealExpenses / totalMeals : 0;
+        const numUsers = users.length;
+
+        for (const user of users) {
+          const userMeals = meals.filter(m => m.userId.toString() === user._id.toString()).reduce((sum, m) => sum + m.mealCount, 0);
+          const userDeposit = deposits.filter(d => d.userId.toString() === user._id.toString()).reduce((sum, d) => sum + d.amount, 0);
+          const userSingleExpense = expenses.filter(e => e.type === 'Single' && e.userId?.toString() === user._id.toString()).reduce((sum, e) => sum + e.amount, 0);
+
+          const userJointExpenses = expenses.filter(e => {
+            if (e.type !== 'Joint') return false;
+            if (!e.sharedBetween || e.sharedBetween.length === 0) return true;
+            return e.sharedBetween.some((id: any) => id.toString() === user._id.toString());
+          });
+
+          const userJointCost = userJointExpenses.reduce((sum, e) => {
+            const count = (!e.sharedBetween || e.sharedBetween.length === 0) ? numUsers : e.sharedBetween.length;
+            return sum + (e.amount / count);
+          }, 0);
+
+          const mealCost = userMeals * mealRate;
+          const totalCost = mealCost + userJointCost + userSingleExpense;
+          const userBalance = userDeposit - totalCost;
+
+          if (userBalance !== 0) {
+            carryOverList.push({
+              userId: user._id.toString(),
+              balance: parseFloat(userBalance.toFixed(2)),
+              userName: user.name
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Deactivate all months
+    await Month.updateMany({}, { isActive: false });
+
+    // 3. Create the new month
     const newMonth = await Month.create({
       name: monthName,
       startDate: startDate,
       sheetTabName: monthName,
       isActive: true
     });
+
+    // 4. Carry over balances to the new month
+    if (carryOverBalance && carryOverList.length > 0) {
+      for (const item of carryOverList) {
+        const initialDeposit = await Deposit.create({
+          monthId: newMonth._id,
+          userId: item.userId,
+          amount: item.balance,
+          date: new Date(startDate).setHours(0,0,0,0)
+        });
+
+        await syncDataToSheet(newMonth.sheetTabName, {
+          date: new Date(startDate).toLocaleDateString(),
+          memberName: item.userName,
+          type: 'Deposit',
+          description: 'Balance Carried Over',
+          amount: item.balance,
+          time: new Date().toLocaleTimeString(),
+          _id: initialDeposit._id.toString()
+        });
+      }
+    }
 
     return { success: true, month: JSON.parse(JSON.stringify(newMonth)) };
   } catch (error: any) {
