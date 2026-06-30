@@ -22,7 +22,9 @@ import {
   Coins,
   Award,
   Sparkles,
-  Filter
+  Filter,
+  Check,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -31,7 +33,11 @@ import { useEffect, useState } from 'react';
 import { 
   getDashboardData, 
   getUserMealStatusForTodayAndTomorrow, 
-  updateUserMealForDate 
+  updateUserMealForDate,
+  createOrUpdateMealRequest,
+  getPendingMealRequests,
+  approveMealRequest,
+  rejectMealRequest
 } from './actions/dataActions';
 import { getBazaarSchedules } from './actions/bazaarActions';
 import { useRouter } from 'next/navigation';
@@ -47,13 +53,20 @@ export default function Home() {
   const [allMembers, setAllMembers] = useState<any[]>([]);
   const [bazaarSchedules, setBazaarSchedules] = useState<any[]>([]);
   
-  // Quick Meal Planner state
-  const [myMeals, setMyMeals] = useState<{ today: any, tomorrow: any } | null>(null);
+  // Daily Meals state
+  const [myMeals, setMyMeals] = useState<{ today: any, tomorrow: any, pendingToday: any, pendingTomorrow: any } | null>(null);
+  const [draftMeals, setDraftMeals] = useState<{ today: any, tomorrow: any } | null>(null);
   const [mealLoading, setMealLoading] = useState<Record<string, boolean>>({});
+
+  // Manager Approval panel state
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [requestActionLoading, setRequestActionLoading] = useState<Record<string, boolean>>({});
 
   // Table Search and Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"All" | "Positive" | "Negative" | "Manager" | "Member">("All");
+
+  const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
   async function fetchDashboardData() {
     if (!user || !mongoUser || mongoUser.role === 'Pending') {
@@ -102,7 +115,21 @@ export default function Home() {
     if (mongoUser && mongoUser.role !== 'Pending') {
       const res = await getUserMealStatusForTodayAndTomorrow(mongoUser._id);
       if (res.success) {
-        setMyMeals({ today: res.today, tomorrow: res.tomorrow });
+        setMyMeals({
+          today: res.today,
+          tomorrow: res.tomorrow,
+          pendingToday: res.pendingToday,
+          pendingTomorrow: res.pendingTomorrow
+        });
+      }
+    }
+  }
+
+  async function fetchPendingRequests() {
+    if (mongoUser && isManagerOrAdmin) {
+      const res = await getPendingMealRequests();
+      if (res.success) {
+        setPendingRequests(res.requests || []);
       }
     }
   }
@@ -110,9 +137,30 @@ export default function Home() {
   useEffect(() => {
     fetchDashboardData();
     fetchUserMeals();
+    fetchPendingRequests();
   }, [user, mongoUser]);
 
-  const handleMealChange = async (dateStr: 'today' | 'tomorrow', mealType: 'breakfast' | 'lunch' | 'dinner', change: number) => {
+  // Sync draft meals with actual meals state
+  useEffect(() => {
+    if (myMeals) {
+      // If there is a pending request, we show the pending counts in draft. Otherwise show current counts.
+      setDraftMeals({
+        today: {
+          breakfast: myMeals.pendingToday ? myMeals.pendingToday.breakfast : myMeals.today.breakfast,
+          lunch: myMeals.pendingToday ? myMeals.pendingToday.lunch : myMeals.today.lunch,
+          dinner: myMeals.pendingToday ? myMeals.pendingToday.dinner : myMeals.today.dinner,
+        },
+        tomorrow: {
+          breakfast: myMeals.pendingTomorrow ? myMeals.pendingTomorrow.breakfast : myMeals.tomorrow.breakfast,
+          lunch: myMeals.pendingTomorrow ? myMeals.pendingTomorrow.lunch : myMeals.tomorrow.lunch,
+          dinner: myMeals.pendingTomorrow ? myMeals.pendingTomorrow.dinner : myMeals.tomorrow.dinner,
+        }
+      });
+    }
+  }, [myMeals]);
+
+  // Handler for direct edits (Managers/Admins)
+  const handleDirectMealChange = async (dateStr: 'today' | 'tomorrow', mealType: 'breakfast' | 'lunch' | 'dinner', change: number) => {
     if (!mongoUser || !myMeals) return;
     
     const currentVal = myMeals[dateStr][mealType] || 0;
@@ -125,9 +173,13 @@ export default function Home() {
     try {
       const res = await updateUserMealForDate(mongoUser._id, dateStr, mealType, newVal);
       if (res.success) {
-        setMyMeals({ today: res.today, tomorrow: res.tomorrow });
-        toast.success(`${dateStr === 'today' ? 'আজকের' : 'আগামীকালের'} ${mealType === 'breakfast' ? 'সকালের' : mealType === 'lunch' ? 'দুপুরের' : 'রাতের'} মিল আপডেট করা হয়েছে।`);
-        // Refresh dashboard statistics silently
+        setMyMeals({
+          today: res.today,
+          tomorrow: res.tomorrow,
+          pendingToday: res.pendingToday,
+          pendingTomorrow: res.pendingTomorrow
+        });
+        toast.success("মিল সরাসরি আপডেট করা হয়েছে।");
         fetchDashboardData();
       } else {
         toast.error(res.error || "মিল আপডেট করতে সমস্যা হয়েছে।");
@@ -138,11 +190,107 @@ export default function Home() {
       setMealLoading(prev => ({ ...prev, [loadingKey]: false }));
     }
   };
+
+  // Handler for draft updates (Standard members)
+  const handleDraftMealChange = (dateStr: 'today' | 'tomorrow', mealType: 'breakfast' | 'lunch' | 'dinner', change: number) => {
+    if (!draftMeals) return;
+    const currentVal = draftMeals[dateStr][mealType] || 0;
+    const newVal = Math.max(0, currentVal + change);
+    setDraftMeals(prev => ({
+      ...prev!,
+      [dateStr]: {
+        ...prev![dateStr],
+        [mealType]: newVal
+      }
+    }));
+  };
+
+  // Check if draft has changes compared to base state (pending request if exists, otherwise current meal)
+  const hasChanges = (dateStr: 'today' | 'tomorrow') => {
+    if (!myMeals || !draftMeals) return false;
+    const current = myMeals[dateStr];
+    const pending = dateStr === 'today' ? myMeals.pendingToday : myMeals.pendingTomorrow;
+    const draft = draftMeals[dateStr];
+    
+    const base = pending || current;
+    return draft.breakfast !== base.breakfast ||
+           draft.lunch !== base.lunch ||
+           draft.dinner !== base.dinner;
+  };
+
+  // Submit Meal Request (Standard members)
+  const handleSendMealRequest = async (dateStr: 'today' | 'tomorrow') => {
+    if (!mongoUser || !draftMeals) return;
+    const draft = draftMeals[dateStr];
+    
+    const loadingKey = `${dateStr}-request`;
+    setMealLoading(prev => ({ ...prev, [loadingKey]: true }));
+
+    try {
+      const res = await createOrUpdateMealRequest(mongoUser._id, dateStr, draft.breakfast, draft.lunch, draft.dinner);
+      if (res.success) {
+        setMyMeals({
+          today: res.today,
+          tomorrow: res.tomorrow,
+          pendingToday: res.pendingToday,
+          pendingTomorrow: res.pendingTomorrow
+        });
+        toast.success("মিলের অনুরোধ সফলভাবে পাঠানো হয়েছে!");
+        fetchPendingRequests(); // refresh if we are also admin/manager (though they edit directly)
+      } else {
+        toast.error(res.error || "অনুরোধ পাঠাতে ব্যর্থ হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ত্রুটি ঘটেছে।");
+    } finally {
+      setMealLoading(prev => ({ ...prev, [loadingKey]: false }));
+    }
+  };
+
+  // Approve Meal Request (Managers/Admins)
+  const handleApproveRequest = async (requestId: string) => {
+    if (!mongoUser) return;
+    setRequestActionLoading(prev => ({ ...prev, [requestId]: true }));
+    try {
+      const res = await approveMealRequest(requestId, mongoUser._id);
+      if (res.success) {
+        toast.success("অনুরোধ অনুমোদন করা হয়েছে!");
+        fetchPendingRequests();
+        fetchDashboardData();
+        fetchUserMeals();
+      } else {
+        toast.error(res.error || "অনুমোদন ব্যর্থ হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ত্রুটি ঘটেছে।");
+    } finally {
+      setRequestActionLoading(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  // Reject Meal Request (Managers/Admins)
+  const handleRejectRequest = async (requestId: string) => {
+    if (!mongoUser) return;
+    setRequestActionLoading(prev => ({ ...prev, [requestId]: true }));
+    try {
+      const res = await rejectMealRequest(requestId, mongoUser._id);
+      if (res.success) {
+        toast.success("অনুরোধ প্রত্যাখ্যান করা হয়েছে!");
+        fetchPendingRequests();
+      } else {
+        toast.error(res.error || "প্রত্যাখ্যান ব্যর্থ হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ত্রুটি ঘটেছে।");
+    } finally {
+      setRequestActionLoading(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
   
   if (authLoading || dataLoading) {
     return (
       <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+        <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
         <p className="text-gray-500 font-medium">লোড হচ্ছে...</p>
       </div>
     );
@@ -151,12 +299,12 @@ export default function Home() {
   if (!user || !mongoUser) {
     return (
       <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh] bg-white rounded-3xl p-8 border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-        <div suppressHydrationWarning className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6">
-          <Wallet className="w-10 h-10 text-blue-600" />
+        <div suppressHydrationWarning className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
+          <Wallet className="w-10 h-10 text-indigo-600" />
         </div>
         <h2 className="text-3xl font-bold text-gray-900 mb-2">Mess Manager Premium</h2>
         <p className="text-gray-500 mb-8 max-w-md text-center">আপনার মেসের সব হিসাব নিকাশ এখন আপনার হাতের মুঠোয়। ব্যবহার করতে লগইন করুন।</p>
-        <Link href="/login" className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-md shadow-blue-200">
+        <Link href="/login" className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors shadow-md shadow-indigo-200">
           লগইন করুন
         </Link>
       </div>
@@ -241,41 +389,41 @@ export default function Home() {
         </div>
         
         <div className="flex items-center gap-3 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-           <button onClick={() => router.push('/chat')} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm hover:border-blue-400 hover:text-blue-600 transition-colors whitespace-nowrap">
-             <MessageSquare className="w-4 h-4 text-blue-500" /> মেস চ্যাট
+           <button onClick={() => router.push('/chat')} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm hover:border-indigo-400 hover:text-indigo-600 transition-colors whitespace-nowrap">
+             <MessageSquare className="w-4 h-4 text-indigo-500" /> মেস চ্যাট
            </button>
            <button onClick={() => router.push('/bazaar')} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm hover:border-emerald-400 hover:text-emerald-600 transition-colors whitespace-nowrap">
              <Calendar className="w-4 h-4 text-emerald-500" /> বাজার শিডিউল
            </button>
-           {(mongoUser.role === 'Super Admin' || mongoUser.role === 'Manager') && (
-             <button onClick={() => router.push('/report/single')} className="flex items-center gap-2 px-4 py-2.5 bg-gray-955 text-white font-bold rounded-xl shadow-sm hover:bg-gray-800 transition-colors whitespace-nowrap">
-               <FileText className="w-4 h-4 text-rose-400" /> লেনদেন ম্যানেজ
+           {isManagerOrAdmin && (
+             <button onClick={() => router.push('/report/single')} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-colors whitespace-nowrap">
+               <FileText className="w-4 h-4" /> লেনদেন ম্যানেজ
              </button>
            )}
         </div>
       </div>
 
-      {/* Global Month Statistics Card */}
-      <div suppressHydrationWarning className="relative bg-gradient-to-br from-indigo-900 via-slate-900 to-blue-955 text-white rounded-[2rem] p-6 md:p-8 border border-slate-800 shadow-xl overflow-hidden">
+      {/* Global Month Statistics Card - Light Premium Theme */}
+      <div suppressHydrationWarning className="relative bg-gradient-to-br from-indigo-50/90 via-white/80 to-blue-50/90 text-gray-900 rounded-[2.5rem] p-6 md:p-8 border border-indigo-100/60 shadow-[0_8px_30px_rgb(99,102,241,0.05)] overflow-hidden">
         {/* Soft decorative blur shapes */}
-        <div suppressHydrationWarning className="absolute -top-20 -left-20 w-60 h-60 bg-blue-500/20 rounded-full blur-3xl"></div>
-        <div suppressHydrationWarning className="absolute -bottom-20 -right-20 w-60 h-60 bg-indigo-500/20 rounded-full blur-3xl"></div>
+        <div suppressHydrationWarning className="absolute -top-20 -left-20 w-60 h-60 bg-blue-100/55 rounded-full blur-3xl"></div>
+        <div suppressHydrationWarning className="absolute -bottom-20 -right-20 w-60 h-60 bg-indigo-100/55 rounded-full blur-3xl"></div>
         
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8">
           <div className="flex items-center gap-4">
-             <div className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center text-white border border-white/20 font-black text-2xl">
+             <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg shadow-indigo-200">
                {messName?.charAt(0) || 'M'}
              </div>
              <div>
-               <h1 className="text-2xl font-black tracking-tight">{messName || 'Mohakhali Mess'}</h1>
-               <p className="text-sm text-indigo-200/80 font-medium">
+               <h1 className="text-2xl font-black tracking-tight text-gray-900">{messName || 'Mohakhali Mess'}</h1>
+               <p className="text-xs text-indigo-600 font-bold bg-indigo-50/80 border border-indigo-100/50 px-2.5 py-0.5 rounded-full mt-1 inline-block">
                  {globalStats.monthName === 'কোনো চলমান মাস নেই' ? 'কোনো চলমান মাস নেই' : `${globalStats.monthName} (চলমান মাস)`}
                </p>
              </div>
           </div>
           <button 
             onClick={() => router.push('/report/single')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold rounded-xl border border-white/10 transition-all text-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 text-indigo-600 font-bold rounded-xl border border-gray-200/80 transition-all text-xs shadow-sm"
           >
             <FileText className="w-4 h-4" />
             বিস্তারিত রিপোর্ট
@@ -283,33 +431,33 @@ export default function Home() {
         </div>
 
         <div suppressHydrationWarning className="relative z-10 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
-          <div suppressHydrationWarning className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-             <p className="text-xs font-semibold text-emerald-300 mb-1 flex items-center gap-1"><Wallet className="w-3.5 h-3.5"/> ব্যালেন্স</p>
-             <p className="text-lg font-black">{globalStats.balance.toFixed(1)} ৳</p>
+          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+             <p className="text-xs font-bold text-emerald-600 mb-1 flex items-center gap-1"><Wallet className="w-3.5 h-3.5"/> ব্যালেন্স</p>
+             <p className="text-lg font-black text-gray-900">{globalStats.balance.toFixed(1)} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-             <p className="text-xs font-semibold text-blue-300 mb-1 flex items-center gap-1"><ArrowUpRight className="w-3.5 h-3.5"/> মোট জমা</p>
-             <p className="text-lg font-black">{globalStats.totalDeposit.toFixed(0)} ৳</p>
+          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+             <p className="text-xs font-bold text-blue-600 mb-1 flex items-center gap-1"><ArrowUpRight className="w-3.5 h-3.5"/> মোট জমা</p>
+             <p className="text-lg font-black text-gray-900">{globalStats.totalDeposit.toFixed(0)} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-             <p className="text-xs font-semibold text-amber-300 mb-1 flex items-center gap-1"><Utensils className="w-3.5 h-3.5"/> মোট মিল</p>
-             <p className="text-lg font-black">{globalStats.totalMeals.toFixed(1)}</p>
+          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+             <p className="text-xs font-bold text-amber-600 mb-1 flex items-center gap-1"><Utensils className="w-3.5 h-3.5"/> মোট মিল</p>
+             <p className="text-lg font-black text-gray-900">{globalStats.totalMeals.toFixed(1)}</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-             <p className="text-xs font-semibold text-rose-300 mb-1 flex items-center gap-1"><TrendingDown className="w-3.5 h-3.5"/> মিল খরচ</p>
-             <p className="text-lg font-black">{globalStats.mealExpenses.toFixed(0)} ৳</p>
+          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+             <p className="text-xs font-bold text-rose-600 mb-1 flex items-center gap-1"><TrendingDown className="w-3.5 h-3.5"/> মিল খরচ</p>
+             <p className="text-lg font-black text-gray-900">{globalStats.mealExpenses.toFixed(0)} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-             <p className="text-xs font-semibold text-indigo-300 mb-1 flex items-center gap-1"><Receipt className="w-3.5 h-3.5"/> মিল রেট</p>
-             <p className="text-lg font-black text-indigo-200">{globalStats.mealRate.toFixed(2)} ৳</p>
+          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+             <p className="text-xs font-bold text-indigo-600 mb-1 flex items-center gap-1"><Receipt className="w-3.5 h-3.5"/> মিল রেট</p>
+             <p className="text-lg font-black text-gray-900">{globalStats.mealRate.toFixed(2)} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-             <p className="text-xs font-semibold text-fuchsia-300 mb-1 flex items-center gap-1"><ShoppingBag className="w-3.5 h-3.5"/> একক খরচ</p>
-             <p className="text-lg font-black">{globalStats.singleExpenses?.toFixed(0) || '0'} ৳</p>
+          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+             <p className="text-xs font-bold text-purple-600 mb-1 flex items-center gap-1"><ShoppingBag className="w-3.5 h-3.5"/> একক খরচ</p>
+             <p className="text-lg font-black text-gray-900">{globalStats.singleExpenses?.toFixed(0) || '0'} ৳</p>
           </div>
-          <div suppressHydrationWarning className="bg-white/5 backdrop-blur-md p-4 rounded-xl border border-white/10">
-             <p className="text-xs font-semibold text-teal-300 mb-1 flex items-center gap-1"><Users className="w-3.5 h-3.5"/> যৌথ খরচ</p>
-             <p className="text-lg font-black">{globalStats.jointExpenses?.toFixed(0) || '0'} ৳</p>
+          <div suppressHydrationWarning className="bg-white/80 backdrop-blur-md p-4 rounded-xl border border-gray-100 shadow-sm">
+             <p className="text-xs font-bold text-teal-600 mb-1 flex items-center gap-1"><Users className="w-3.5 h-3.5"/> যৌথ খরচ</p>
+             <p className="text-lg font-black text-gray-900">{globalStats.jointExpenses?.toFixed(0) || '0'} ৳</p>
           </div>
         </div>
       </div>
@@ -380,7 +528,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Quick Meal Planner */}
+          {/* Quick Meal Planner / Requester */}
           <div suppressHydrationWarning className="bg-white border border-gray-150 shadow-sm rounded-3xl p-6 relative overflow-hidden">
             <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
               <div>
@@ -388,190 +536,296 @@ export default function Home() {
                   <Utensils className="w-5 h-5 text-orange-500" />
                   আজ ও আগামীকালের মিল প্ল্যানার
                 </h3>
-                <p className="text-xs text-gray-500 mt-0.5">সহজেই নিজের মিলের পরিমাণ পরিবর্তন করুন</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {isManagerOrAdmin ? 'মিল সরাসরি আপডেট করুন' : 'মিলের পরিবর্তন অনুরোধ জানান'}
+                </p>
               </div>
-              <span className="text-xs bg-orange-50 text-orange-600 px-3 py-1 rounded-full font-bold">লাইভ সিঙ্ক</span>
+              <span className="text-xs bg-orange-50 text-orange-600 px-3 py-1 rounded-full font-bold">
+                {isManagerOrAdmin ? 'অ্যাডমিন প্যানেল' : 'রিকোয়েস্ট প্যানেল'}
+              </span>
             </div>
 
-            {myMeals ? (
+            {myMeals && draftMeals ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
                 
                 {/* Today Column */}
-                <div className="bg-gray-50/60 rounded-2xl p-4 border border-gray-100">
-                  <h4 className="font-bold text-gray-800 text-sm mb-3 flex justify-between items-center">
-                    <span>আজকের মিল (Today)</span>
-                    <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                      মোট: {((myMeals.today.breakfast || 0) + (myMeals.today.lunch || 0) + (myMeals.today.dinner || 0)).toFixed(1)}
-                    </span>
-                  </h4>
-                  <div className="space-y-3">
-                    {/* Breakfast */}
-                    <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🥚 সকালের খাবার</span>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          disabled={mealLoading['today-breakfast']}
-                          onClick={() => handleMealChange('today', 'breakfast', -0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        {mealLoading['today-breakfast'] ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                        ) : (
-                          <span className="text-sm font-black text-gray-900 w-6 text-center">{myMeals.today.breakfast || 0}</span>
+                <div className="bg-gray-50/60 rounded-2xl p-4 border border-gray-100 flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-bold text-gray-800 text-sm mb-3 flex justify-between items-center">
+                      <span>আজকের মিল (Today)</span>
+                      <div className="flex items-center gap-1.5">
+                        {myMeals.pendingToday && (
+                          <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-black animate-pulse">পেন্ডিং</span>
                         )}
-                        <button 
-                          disabled={mealLoading['today-breakfast']}
-                          onClick={() => handleMealChange('today', 'breakfast', 0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
+                        <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                          মোট: {(isManagerOrAdmin 
+                            ? ((myMeals.today.breakfast || 0) + (myMeals.today.lunch || 0) + (myMeals.today.dinner || 0))
+                            : ((draftMeals.today.breakfast || 0) + (draftMeals.today.lunch || 0) + (draftMeals.today.dinner || 0))
+                          ).toFixed(1)}
+                        </span>
                       </div>
-                    </div>
+                    </h4>
 
-                    {/* Lunch */}
-                    <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍛 দুপুরের খাবার</span>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          disabled={mealLoading['today-lunch']}
-                          onClick={() => handleMealChange('today', 'lunch', -0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        {mealLoading['today-lunch'] ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                        ) : (
-                          <span className="text-sm font-black text-gray-900 w-6 text-center">{myMeals.today.lunch || 0}</span>
-                        )}
-                        <button 
-                          disabled={mealLoading['today-lunch']}
-                          onClick={() => handleMealChange('today', 'lunch', 0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
+                    <div className="space-y-3">
+                      {/* Breakfast */}
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🥚 সকালের খাবার</span>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            disabled={mealLoading['today-breakfast'] || mealLoading['today-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('today', 'breakfast', -0.5) 
+                              : handleDraftMealChange('today', 'breakfast', -0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          {mealLoading['today-breakfast'] ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                          ) : (
+                            <span className="text-sm font-black text-gray-900 w-6 text-center">
+                              {isManagerOrAdmin ? (myMeals.today.breakfast || 0) : (draftMeals.today.breakfast || 0)}
+                            </span>
+                          )}
+                          <button 
+                            disabled={mealLoading['today-breakfast'] || mealLoading['today-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('today', 'breakfast', 0.5) 
+                              : handleDraftMealChange('today', 'breakfast', 0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Dinner */}
-                    <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍲 রাতের খাবার</span>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          disabled={mealLoading['today-dinner']}
-                          onClick={() => handleMealChange('today', 'dinner', -0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        {mealLoading['today-dinner'] ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                        ) : (
-                          <span className="text-sm font-black text-gray-900 w-6 text-center">{myMeals.today.dinner || 0}</span>
-                        )}
-                        <button 
-                          disabled={mealLoading['today-dinner']}
-                          onClick={() => handleMealChange('today', 'dinner', 0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
+                      {/* Lunch */}
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍛 দুপুরের খাবার</span>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            disabled={mealLoading['today-lunch'] || mealLoading['today-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('today', 'lunch', -0.5) 
+                              : handleDraftMealChange('today', 'lunch', -0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          {mealLoading['today-lunch'] ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                          ) : (
+                            <span className="text-sm font-black text-gray-900 w-6 text-center">
+                              {isManagerOrAdmin ? (myMeals.today.lunch || 0) : (draftMeals.today.lunch || 0)}
+                            </span>
+                          )}
+                          <button 
+                            disabled={mealLoading['today-lunch'] || mealLoading['today-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('today', 'lunch', 0.5) 
+                              : handleDraftMealChange('today', 'lunch', 0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Dinner */}
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍲 রাতের খাবার</span>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            disabled={mealLoading['today-dinner'] || mealLoading['today-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('today', 'dinner', -0.5) 
+                              : handleDraftMealChange('today', 'dinner', -0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          {mealLoading['today-dinner'] ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                          ) : (
+                            <span className="text-sm font-black text-gray-900 w-6 text-center">
+                              {isManagerOrAdmin ? (myMeals.today.dinner || 0) : (draftMeals.today.dinner || 0)}
+                            </span>
+                          )}
+                          <button 
+                            disabled={mealLoading['today-dinner'] || mealLoading['today-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('today', 'dinner', 0.5) 
+                              : handleDraftMealChange('today', 'dinner', 0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  {/* Standard member send request button */}
+                  {!isManagerOrAdmin && hasChanges('today') && (
+                    <button
+                      onClick={() => handleSendMealRequest('today')}
+                      disabled={mealLoading['today-request']}
+                      className="mt-4 w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-150 flex items-center justify-center gap-2"
+                    >
+                      {mealLoading['today-request'] ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5" />
+                      )}
+                      আজকের মিল পরিবর্তন অনুরোধ পাঠান
+                    </button>
+                  )}
                 </div>
 
                 {/* Tomorrow Column */}
-                <div className="bg-gray-50/60 rounded-2xl p-4 border border-gray-100">
-                  <h4 className="font-bold text-gray-800 text-sm mb-3 flex justify-between items-center">
-                    <span>আগামীকালের মিল (Tomorrow)</span>
-                    <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                      মোট: {((myMeals.tomorrow.breakfast || 0) + (myMeals.tomorrow.lunch || 0) + (myMeals.tomorrow.dinner || 0)).toFixed(1)}
-                    </span>
-                  </h4>
-                  <div className="space-y-3">
-                    {/* Breakfast */}
-                    <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🥚 সকালের খাবার</span>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          disabled={mealLoading['tomorrow-breakfast']}
-                          onClick={() => handleMealChange('tomorrow', 'breakfast', -0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        {mealLoading['tomorrow-breakfast'] ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                        ) : (
-                          <span className="text-sm font-black text-gray-900 w-6 text-center">{myMeals.tomorrow.breakfast || 0}</span>
+                <div className="bg-gray-50/60 rounded-2xl p-4 border border-gray-100 flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-bold text-gray-800 text-sm mb-3 flex justify-between items-center">
+                      <span>আগামীকালের মিল (Tomorrow)</span>
+                      <div className="flex items-center gap-1.5">
+                        {myMeals.pendingTomorrow && (
+                          <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-black animate-pulse">পেন্ডিং</span>
                         )}
-                        <button 
-                          disabled={mealLoading['tomorrow-breakfast']}
-                          onClick={() => handleMealChange('tomorrow', 'breakfast', 0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
+                        <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                          মোট: {(isManagerOrAdmin 
+                            ? ((myMeals.tomorrow.breakfast || 0) + (myMeals.tomorrow.lunch || 0) + (myMeals.tomorrow.dinner || 0))
+                            : ((draftMeals.tomorrow.breakfast || 0) + (draftMeals.tomorrow.lunch || 0) + (draftMeals.tomorrow.dinner || 0))
+                          ).toFixed(1)}
+                        </span>
                       </div>
-                    </div>
+                    </h4>
 
-                    {/* Lunch */}
-                    <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍛 দুপুরের খাবার</span>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          disabled={mealLoading['tomorrow-lunch']}
-                          onClick={() => handleMealChange('tomorrow', 'lunch', -0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        {mealLoading['tomorrow-lunch'] ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                        ) : (
-                          <span className="text-sm font-black text-gray-900 w-6 text-center">{myMeals.tomorrow.lunch || 0}</span>
-                        )}
-                        <button 
-                          disabled={mealLoading['tomorrow-lunch']}
-                          onClick={() => handleMealChange('tomorrow', 'lunch', 0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
+                    <div className="space-y-3">
+                      {/* Breakfast */}
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🥚 সকালের খাবার</span>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            disabled={mealLoading['tomorrow-breakfast'] || mealLoading['tomorrow-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('tomorrow', 'breakfast', -0.5) 
+                              : handleDraftMealChange('tomorrow', 'breakfast', -0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          {mealLoading['tomorrow-breakfast'] ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                          ) : (
+                            <span className="text-sm font-black text-gray-900 w-6 text-center">
+                              {isManagerOrAdmin ? (myMeals.tomorrow.breakfast || 0) : (draftMeals.tomorrow.breakfast || 0)}
+                            </span>
+                          )}
+                          <button 
+                            disabled={mealLoading['tomorrow-breakfast'] || mealLoading['tomorrow-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('tomorrow', 'breakfast', 0.5) 
+                              : handleDraftMealChange('tomorrow', 'breakfast', 0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Dinner */}
-                    <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍲 রাতের খাবার</span>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          disabled={mealLoading['tomorrow-dinner']}
-                          onClick={() => handleMealChange('tomorrow', 'dinner', -0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        {mealLoading['tomorrow-dinner'] ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                        ) : (
-                          <span className="text-sm font-black text-gray-900 w-6 text-center">{myMeals.tomorrow.dinner || 0}</span>
-                        )}
-                        <button 
-                          disabled={mealLoading['tomorrow-dinner']}
-                          onClick={() => handleMealChange('tomorrow', 'dinner', 0.5)}
-                          className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
+                      {/* Lunch */}
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍛 দুপুরের খাবার</span>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            disabled={mealLoading['tomorrow-lunch'] || mealLoading['tomorrow-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('tomorrow', 'lunch', -0.5) 
+                              : handleDraftMealChange('tomorrow', 'lunch', -0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          {mealLoading['tomorrow-lunch'] ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                          ) : (
+                            <span className="text-sm font-black text-gray-900 w-6 text-center">
+                              {isManagerOrAdmin ? (myMeals.tomorrow.lunch || 0) : (draftMeals.tomorrow.lunch || 0)}
+                            </span>
+                          )}
+                          <button 
+                            disabled={mealLoading['tomorrow-lunch'] || mealLoading['tomorrow-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('tomorrow', 'lunch', 0.5) 
+                              : handleDraftMealChange('tomorrow', 'lunch', 0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Dinner */}
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">🍲 রাতের খাবার</span>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            disabled={mealLoading['tomorrow-dinner'] || mealLoading['tomorrow-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('tomorrow', 'dinner', -0.5) 
+                              : handleDraftMealChange('tomorrow', 'dinner', -0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          {mealLoading['tomorrow-dinner'] ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                          ) : (
+                            <span className="text-sm font-black text-gray-900 w-6 text-center">
+                              {isManagerOrAdmin ? (myMeals.tomorrow.dinner || 0) : (draftMeals.tomorrow.dinner || 0)}
+                            </span>
+                          )}
+                          <button 
+                            disabled={mealLoading['tomorrow-dinner'] || mealLoading['tomorrow-request']}
+                            onClick={() => isManagerOrAdmin 
+                              ? handleDirectMealChange('tomorrow', 'dinner', 0.5) 
+                              : handleDraftMealChange('tomorrow', 'dinner', 0.5)
+                            }
+                            className="w-7 h-7 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 rounded-lg flex items-center justify-center font-bold text-gray-600 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  {/* Standard member send request button */}
+                  {!isManagerOrAdmin && hasChanges('tomorrow') && (
+                    <button
+                      onClick={() => handleSendMealRequest('tomorrow')}
+                      disabled={mealLoading['tomorrow-request']}
+                      className="mt-4 w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-150 flex items-center justify-center gap-2"
+                    >
+                      {mealLoading['tomorrow-request'] ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5" />
+                      )}
+                      আগামীকালের মিল পরিবর্তন অনুরোধ পাঠান
+                    </button>
+                  )}
                 </div>
 
               </div>
@@ -579,6 +833,56 @@ export default function Home() {
               <div className="flex justify-center p-6"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>
             )}
           </div>
+
+          {/* Pending Meal Requests Panel (Only visible to Managers/Admins) */}
+          {isManagerOrAdmin && pendingRequests.length > 0 && (
+            <div suppressHydrationWarning className="bg-white border border-amber-100 shadow-sm rounded-3xl p-6 relative overflow-hidden">
+              <div className="flex items-center gap-2 mb-4 border-b border-amber-50 pb-3">
+                <Crown className="w-5 h-5 text-amber-500" />
+                <h3 className="font-extrabold text-gray-900 text-lg">মেম্বারদের মিল পরিবর্তনের অনুরোধ ({pendingRequests.length})</h3>
+              </div>
+              
+              <div className="space-y-4 max-h-[300px] overflow-y-auto scrollbar-thin">
+                {pendingRequests.map((req) => (
+                  <div key={req._id} className="bg-amber-50/30 border border-amber-100/50 p-4 rounded-2xl flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold flex-shrink-0">
+                        {req.userId?.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900 text-sm capitalize">{req.userId?.name}</p>
+                        <p className="text-[10px] font-bold text-gray-500">
+                          তারিখ: {new Date(req.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                        </p>
+                        <div className="flex gap-2 mt-1 text-[10px] font-extrabold text-indigo-700 bg-indigo-50/50 border border-indigo-100/30 px-2 py-0.5 rounded-md w-fit">
+                          <span>সকাল: {req.breakfast}</span> | <span>দুপুর: {req.lunch}</span> | <span>রাত: {req.dinner}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleRejectRequest(req._id)}
+                        disabled={requestActionLoading[req._id]}
+                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition-colors"
+                        title="প্রত্যাখ্যান করুন"
+                      >
+                        {requestActionLoading[req._id] ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => handleApproveRequest(req._id)}
+                        disabled={requestActionLoading[req._id]}
+                        className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl border border-emerald-100 transition-colors"
+                        title="অনুমোদন করুন"
+                      >
+                        {requestActionLoading[req._id] ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Column 2: Bazaar Date & Achievements (Takes 4 columns) */}
@@ -640,7 +944,7 @@ export default function Home() {
                })()}
                
                <div className="mt-4 pt-4 border-t border-gray-100">
-                 {(mongoUser.role === 'Super Admin' || mongoUser.role === 'Manager') ? (
+                 {isManagerOrAdmin ? (
                    <button 
                      onClick={() => router.push('/bazaar')}
                      className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 text-sm shadow-md"
@@ -662,7 +966,7 @@ export default function Home() {
           </div>
 
           {/* Leaderboard Achievements Widget */}
-          <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-sm border border-gray-155 flex flex-col relative overflow-hidden">
+          <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-sm border border-gray-150 flex flex-col relative overflow-hidden">
             <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
               <Crown className="w-5 h-5 text-amber-500" />
               মেস অ্যাচিভমেন্টস (চলমান মাস)

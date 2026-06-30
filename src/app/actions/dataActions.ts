@@ -9,6 +9,7 @@ import User from "@/models/User";
 import { syncDataToSheet, updateDataInSheet, deleteDataFromSheet } from "./sheetActions";
 import { createNotification } from "./notificationActions";
 import mongoose from "mongoose";
+import MealRequest from "@/models/MealRequest";
 
 export async function addMeal(monthId: string, userId: string, date: Date, mealCount: number) {
   try {
@@ -344,15 +345,26 @@ export async function getDashboardData() {
     };
 
     const numUsers = users.length;
-    const jointCostPerPerson = numUsers > 0 ? jointExpenses / numUsers : 0;
 
     const memberStats = users.map(user => {
       const userMeals = meals.filter(m => m.userId.toString() === user._id.toString()).reduce((sum, m) => sum + m.mealCount, 0);
       const userDeposit = deposits.filter(d => d.userId.toString() === user._id.toString()).reduce((sum, d) => sum + d.amount, 0);
       const userSingleExpense = expenses.filter(e => e.type === 'Single' && e.userId?.toString() === user._id.toString()).reduce((sum, e) => sum + e.amount, 0);
       
+      // Calculate user's specific joint cost
+      const userJointExpenses = expenses.filter(e => {
+        if (e.type !== 'Joint') return false;
+        if (!e.sharedBetween || e.sharedBetween.length === 0) return true;
+        return e.sharedBetween.some((id: any) => id.toString() === user._id.toString());
+      });
+
+      const userJointCost = userJointExpenses.reduce((sum, e) => {
+        const count = (!e.sharedBetween || e.sharedBetween.length === 0) ? numUsers : e.sharedBetween.length;
+        return sum + (e.amount / count);
+      }, 0);
+
       const mealCost = userMeals * mealRate;
-      const totalCost = mealCost + jointCostPerPerson + userSingleExpense;
+      const totalCost = mealCost + userJointCost + userSingleExpense;
       const userBalance = userDeposit - totalCost;
 
       return {
@@ -362,7 +374,7 @@ export async function getDashboardData() {
         totalMeal: userMeals,
         mealCost,
         singleCost: userSingleExpense,
-        jointCost: jointCostPerPerson,
+        jointCost: userJointCost,
         totalCost,
         deposit: userDeposit,
         balance: userBalance,
@@ -413,15 +425,26 @@ export async function getAllMonthsReportData() {
       };
 
       const numUsers = users.length;
-      const jointCostPerPerson = numUsers > 0 ? jointExpenses / numUsers : 0;
 
       const memberStats = users.map(user => {
         const userMeals = meals.filter(m => m.userId.toString() === user._id.toString()).reduce((sum, m) => sum + m.mealCount, 0);
         const userDeposit = deposits.filter(d => d.userId.toString() === user._id.toString()).reduce((sum, d) => sum + d.amount, 0);
         const userSingleExpense = expenses.filter(e => e.type === 'Single' && e.userId?.toString() === user._id.toString()).reduce((sum, e) => sum + e.amount, 0);
         
+        // Calculate user's specific joint cost
+        const userJointExpenses = expenses.filter(e => {
+          if (e.type !== 'Joint') return false;
+          if (!e.sharedBetween || e.sharedBetween.length === 0) return true;
+          return e.sharedBetween.some((id: any) => id.toString() === user._id.toString());
+        });
+
+        const userJointCost = userJointExpenses.reduce((sum, e) => {
+          const count = (!e.sharedBetween || e.sharedBetween.length === 0) ? numUsers : e.sharedBetween.length;
+          return sum + (e.amount / count);
+        }, 0);
+
         const mealCost = userMeals * mealRate;
-        const totalCost = mealCost + jointCostPerPerson + userSingleExpense;
+        const totalCost = mealCost + userJointCost + userSingleExpense;
         const userBalance = userDeposit - totalCost;
 
         return {
@@ -430,7 +453,7 @@ export async function getAllMonthsReportData() {
           totalMeal: userMeals,
           mealCost,
           singleCost: userSingleExpense,
-          jointCost: jointCostPerPerson,
+          jointCost: userJointCost,
           totalCost,
           deposit: userDeposit,
           balance: userBalance
@@ -600,11 +623,27 @@ export async function getUserMealStatusForTodayAndTomorrow(userId: string) {
       date: { $gte: tomorrowStart, $lte: tomorrowEnd }
     });
 
+    const todayRequest = await MealRequest.findOne({
+      monthId: activeMonth._id,
+      userId,
+      status: 'Pending',
+      date: { $gte: todayStart, $lte: todayEnd }
+    });
+
+    const tomorrowRequest = await MealRequest.findOne({
+      monthId: activeMonth._id,
+      userId,
+      status: 'Pending',
+      date: { $gte: tomorrowStart, $lte: tomorrowEnd }
+    });
+
     return {
       success: true,
       activeMonthId: activeMonth._id.toString(),
       today: todayMeal ? JSON.parse(JSON.stringify(todayMeal)) : { breakfast: 0, lunch: 0, dinner: 0, mealCount: 0, date: todayStart },
-      tomorrow: tomorrowMeal ? JSON.parse(JSON.stringify(tomorrowMeal)) : { breakfast: 0, lunch: 0, dinner: 0, mealCount: 0, date: tomorrowStart }
+      tomorrow: tomorrowMeal ? JSON.parse(JSON.stringify(tomorrowMeal)) : { breakfast: 0, lunch: 0, dinner: 0, mealCount: 0, date: tomorrowStart },
+      pendingToday: todayRequest ? JSON.parse(JSON.stringify(todayRequest)) : null,
+      pendingTomorrow: tomorrowRequest ? JSON.parse(JSON.stringify(tomorrowRequest)) : null
     };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -706,4 +745,222 @@ export async function updateUserMealForDate(
     return { success: false, error: error.message };
   }
 }
+
+export async function createOrUpdateMealRequest(
+  userId: string,
+  dateStr: 'today' | 'tomorrow',
+  breakfast: number,
+  lunch: number,
+  dinner: number
+) {
+  try {
+    await connectToDatabase();
+    
+    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+    if (!activeMonth) return { success: false, error: "No active month" };
+
+    const targetDate = new Date();
+    if (dateStr === 'tomorrow') {
+      targetDate.setDate(targetDate.getDate() + 1);
+    }
+    targetDate.setHours(12, 0, 0, 0);
+
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let existingRequest = await MealRequest.findOne({
+      monthId: activeMonth._id,
+      userId,
+      status: 'Pending',
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    if (existingRequest) {
+      existingRequest.breakfast = breakfast;
+      existingRequest.lunch = lunch;
+      existingRequest.dinner = dinner;
+      await existingRequest.save();
+    } else {
+      await MealRequest.create({
+        monthId: activeMonth._id,
+        userId,
+        date: targetDate,
+        breakfast,
+        lunch,
+        dinner,
+        status: 'Pending'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (user) {
+      await createNotification(
+        "মিলের অনুরোধ পাঠানো হয়েছে",
+        `${user.name} ${dateStr === 'today' ? 'আজকের' : 'আগামীকালের'} মিলের জন্য অনুরোধ পাঠিয়েছেন (সকাল: ${breakfast}, দুপুর: ${lunch}, রাত: ${dinner})।`
+      );
+    }
+
+    return getUserMealStatusForTodayAndTomorrow(userId);
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getPendingMealRequests() {
+  try {
+    await connectToDatabase();
+    
+    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+    if (!activeMonth) return { success: true, requests: [] };
+
+    const requests = await MealRequest.find({
+      monthId: activeMonth._id,
+      status: 'Pending'
+    }).populate('userId', 'name email photoURL');
+
+    return { success: true, requests: JSON.parse(JSON.stringify(requests)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function approveMealRequest(requestId: string, adminUserId: string) {
+  try {
+    await connectToDatabase();
+
+    const admin = await User.findById(adminUserId);
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const request = await MealRequest.findById(requestId);
+    if (!request || request.status !== 'Pending') {
+      return { success: false, error: 'Request not found or already processed.' };
+    }
+
+    const startOfDay = new Date(request.date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(request.date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let existingMeal = await Meal.findOne({
+      monthId: request.monthId,
+      userId: request.userId,
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    const mealCount = request.breakfast + request.lunch + request.dinner;
+    const user = await User.findById(request.userId);
+    const month = await Month.findById(request.monthId);
+
+    if (existingMeal) {
+      existingMeal.breakfast = request.breakfast;
+      existingMeal.lunch = request.lunch;
+      existingMeal.dinner = request.dinner;
+      existingMeal.mealCount = mealCount;
+
+      if (mealCount <= 0) {
+        const idToDelete = existingMeal._id.toString();
+        await existingMeal.deleteOne();
+        if (month) {
+          try {
+            await deleteDataFromSheet(month.sheetTabName, idToDelete);
+          } catch (sheetErr) {
+            console.error("Sheets delete error:", sheetErr);
+          }
+        }
+      } else {
+        await existingMeal.save();
+        if (month) {
+          try {
+            await updateDataInSheet(month.sheetTabName, existingMeal._id.toString(), {
+              type: 'Meal',
+              amount: mealCount,
+              time: new Date().toLocaleTimeString(),
+            });
+          } catch (sheetErr) {
+            console.error("Sheets update error:", sheetErr);
+          }
+        }
+      }
+    } else {
+      if (mealCount > 0) {
+        const newMeal = new Meal({
+          monthId: request.monthId,
+          userId: request.userId,
+          date: request.date,
+          breakfast: request.breakfast,
+          lunch: request.lunch,
+          dinner: request.dinner,
+          mealCount: mealCount
+        });
+        await newMeal.save();
+
+        if (month && user) {
+          try {
+            await syncDataToSheet(month.sheetTabName, {
+              date: new Date(request.date).toLocaleDateString(),
+              memberName: user.name,
+              type: 'Meal',
+              description: 'Daily Meal',
+              amount: mealCount,
+              time: new Date().toLocaleTimeString(),
+              _id: newMeal._id.toString()
+            });
+          } catch (sheetErr) {
+            console.error("Sheets sync error:", sheetErr);
+          }
+        }
+      }
+    }
+
+    request.status = 'Approved';
+    await request.save();
+
+    if (user) {
+      await createNotification(
+        "মিলের অনুরোধ অনুমোদিত",
+        `ম্যানেজার ${user.name}-এর মিলের পরিবর্তন অনুরোধ অনুমোদন করেছেন।`
+      );
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function rejectMealRequest(requestId: string, adminUserId: string) {
+  try {
+    await connectToDatabase();
+
+    const admin = await User.findById(adminUserId);
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const request = await MealRequest.findById(requestId);
+    if (!request || request.status !== 'Pending') {
+      return { success: false, error: 'Request not found or already processed.' };
+    }
+
+    request.status = 'Rejected';
+    await request.save();
+
+    const user = await User.findById(request.userId);
+    if (user) {
+      await createNotification(
+        "মিলের অনুরোধ প্রত্যাখ্যান",
+        `ম্যানেজার ${user.name}-এর মিলের পরিবর্তন অনুরোধ প্রত্যাখ্যান করেছেন।`
+      );
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 
