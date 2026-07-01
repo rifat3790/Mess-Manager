@@ -52,7 +52,7 @@ export async function addMeal(monthId: string, userId: string, date: Date, mealC
       }
     }
 
-    await createNotification("নতুন মিল যুক্ত করা হয়েছে", `${user?.name || 'মেম্বার'}-এর জন্য ${mealCount} টি মিল যুক্ত করা হয়েছে।`);
+    await createNotification("নতুন মিল যুক্ত হয়েছে", `আপনার অ্যাকাউন্টে নতুন মিল যুক্ত হয়েছে। যোগ করা হয়েছে: ${mealCount} টি। বর্তমান মোট মিল: ${meal.mealCount.toFixed(1)} টি।`, userId);
 
     revalidatePath('/', 'layout');
     return { success: true, meal: JSON.parse(JSON.stringify(meal)) };
@@ -115,17 +115,23 @@ export async function addDeposit(monthId: string, userId: string, amount: number
     const user = await User.findById(userId);
     const month = await Month.findById(monthId);
 
-    await syncDataToSheet(month.sheetTabName, {
-      date: new Date(date).toLocaleDateString(),
-      memberName: user.name,
-      type: 'Deposit',
-      description: 'Money Deposited',
-      amount,
-      time: new Date().toLocaleTimeString(),
-      _id: deposit._id.toString()
-    });
+    if (month && user) {
+      try {
+        await syncDataToSheet(month.sheetTabName, {
+          date: new Date(date).toLocaleDateString(),
+          memberName: user.name,
+          type: 'Deposit',
+          description: 'Money Deposited',
+          amount,
+          time: new Date().toLocaleTimeString(),
+          _id: deposit._id.toString()
+        });
+      } catch (sheetErr) {
+        console.error("Sheets sync error in addDeposit:", sheetErr);
+      }
+    }
 
-    await createNotification("নতুন জমা", `${user.name} এর অ্যাকাউন্টে ${amount} টাকা জমা করা হয়েছে।`);
+    await createNotification("টাকা জমা হয়েছে", `আপনার অ্যাকাউন্টে ${amount} টাকা জমা করা হয়েছে।`, userId);
 
     revalidatePath('/', 'layout');
     return { success: true, deposit: JSON.parse(JSON.stringify(deposit)) };
@@ -142,7 +148,13 @@ export async function deleteMeal(id: string) {
     const month = await Month.findById(meal.monthId);
     const user = await User.findById(meal.userId);
     await meal.deleteOne();
-    if (month) await deleteDataFromSheet(month.sheetTabName, id);
+    if (month) {
+      try {
+        await deleteDataFromSheet(month.sheetTabName, id);
+      } catch (sheetErr) {
+        console.error("Sheets delete error in deleteMeal:", sheetErr);
+      }
+    }
     
     if (user) await createNotification("মিল ডিলিট", `${user.name}-এর একটি মিল রেকর্ড ডিলিট করা হয়েছে।`);
 
@@ -164,7 +176,13 @@ export async function deleteExpense(id: string) {
        if (user) memberName = user.name;
     }
     await expense.deleteOne();
-    if (month) await deleteDataFromSheet(month.sheetTabName, id);
+    if (month) {
+      try {
+        await deleteDataFromSheet(month.sheetTabName, id);
+      } catch (sheetErr) {
+        console.error("Sheets delete error in deleteExpense:", sheetErr);
+      }
+    }
 
     await createNotification("খরচ ডিলিট", `${memberName}-এর একটি খরচের রেকর্ড ডিলিট করা হয়েছে।`);
 
@@ -182,9 +200,15 @@ export async function deleteDeposit(id: string) {
     const month = await Month.findById(deposit.monthId);
     const user = await User.findById(deposit.userId);
     await deposit.deleteOne();
-    if (month) await deleteDataFromSheet(month.sheetTabName, id);
+    if (month) {
+      try {
+        await deleteDataFromSheet(month.sheetTabName, id);
+      } catch (sheetErr) {
+        console.error("Sheets delete error in deleteDeposit:", sheetErr);
+      }
+    }
 
-    if (user) await createNotification("জমা ডিলিট", `${user.name}-এর একটি টাকা জমার রেকর্ড ডিলিট করা হয়েছে।`);
+    if (user) await createNotification("জমা ডিলিট", `আপনার একটি টাকা জমার রেকর্ড ডিলিট করা হয়েছে।`, deposit.userId.toString());
 
     return { success: true };
   } catch (error: any) {
@@ -257,18 +281,21 @@ export async function updateDeposit(id: string, amount: number) {
     if (!deposit) return { success: false, error: "Not found" };
     deposit.amount = amount;
     await deposit.save();
-    
+    const user = await User.findById(deposit.userId);
     const month = await Month.findById(deposit.monthId);
-    if (month) {
-      await updateDataInSheet(month.sheetTabName, id, {
-        type: 'Deposit',
-        amount: amount
-      });
+    if (month && user) {
+      try {
+        await updateDataInSheet(month.sheetTabName, id, {
+          type: 'Deposit',
+          amount: amount
+        });
+      } catch (sheetErr) {
+        console.error("Sheets update error in updateDeposit:", sheetErr);
+      }
     }
 
-    const user = await User.findById(deposit.userId);
     if (user) {
-      await createNotification("জমা আপডেট", `${user.name}-এর জমার পরিমাণ আপডেট করে ${amount} টাকা করা হয়েছে।`);
+      await createNotification("জমা আপডেট", `আপনার জমার পরিমাণ আপডেট করে ${amount} টাকা করা হয়েছে।`, deposit.userId.toString());
     }
 
     return { success: true };
@@ -528,7 +555,7 @@ export async function addBulkMeals(monthId: string, date: Date, mealsData: { use
             console.error("Sheets update error in addBulkMeals:", sheetErr);
           }
         }
-        await createNotification("নতুন মিল যুক্ত করা হয়েছে", `${user?.name || 'মেম্বার'}-এর জন্য ${data.mealCount} টি মিল যুক্ত করা হয়েছে (বর্তমান মোট: ${existing.mealCount} টি)।`);
+        await createNotification("নতুন মিল যুক্ত হয়েছে", `আপনার অ্যাকাউন্টে নতুন মিল যুক্ত হয়েছে। যোগ করা হয়েছে: ${data.mealCount} টি। বর্তমান মোট মিল: ${existing.mealCount.toFixed(1)} টি।`, data.userId);
       } else {
         const newMeal = new Meal({ 
           monthId, 
@@ -557,7 +584,7 @@ export async function addBulkMeals(monthId: string, date: Date, mealsData: { use
             console.error("Sheets sync error in addBulkMeals:", sheetErr);
           }
         }
-        await createNotification("নতুন মিল যুক্ত করা হয়েছে", `${user?.name || 'মেম্বার'}-এর জন্য ${data.mealCount} টি মিল যুক্ত করা হয়েছে।`);
+        await createNotification("নতুন মিল যুক্ত হয়েছে", `আপনার অ্যাকাউন্টে নতুন মিল যুক্ত হয়েছে। যোগ করা হয়েছে: ${data.mealCount} টি। বর্তমান মোট মিল: ${newMeal.mealCount.toFixed(1)} টি।`, data.userId);
       }
     }
 
