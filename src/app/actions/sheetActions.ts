@@ -6,6 +6,8 @@ import User from "@/models/User";
 import Meal from "@/models/Meal";
 import Expense from "@/models/Expense";
 import Deposit from "@/models/Deposit";
+import MealRequest from "@/models/MealRequest";
+import BazaarSchedule from "@/models/BazaarSchedule";
 
 export async function createNewMonthSheet(monthName: string, startDate: Date, carryOverBalance: boolean = false) {
   try {
@@ -78,6 +80,23 @@ export async function createNewMonthSheet(monthName: string, startDate: Date, ca
           date: new Date(startDate).setHours(0,0,0,0)
         });
       }
+    }
+
+    // 5. Automatic cleanup: keep only the latest 3 months' data to free up space
+    const allMonths = await Month.find().sort({ createdAt: -1 });
+    if (allMonths.length > 3) {
+      const monthsToDelete = allMonths.slice(3);
+      const monthIdsToDelete = monthsToDelete.map(m => m._id);
+
+      // Perform deletions of related data in bulk to clean the database storage
+      await Promise.all([
+        Month.deleteMany({ _id: { $in: monthIdsToDelete } }),
+        Meal.deleteMany({ monthId: { $in: monthIdsToDelete } }),
+        Expense.deleteMany({ monthId: { $in: monthIdsToDelete } }),
+        Deposit.deleteMany({ monthId: { $in: monthIdsToDelete } }),
+        MealRequest.deleteMany({ monthId: { $in: monthIdsToDelete } }),
+        BazaarSchedule.deleteMany({ monthId: { $in: monthIdsToDelete } })
+      ]);
     }
 
     return { success: true, month: JSON.parse(JSON.stringify(newMonth)) };
