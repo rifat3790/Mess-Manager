@@ -34,7 +34,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { 
   getDashboardData, 
   getUserMealStatusForTodayAndTomorrow, 
@@ -375,11 +375,75 @@ export default function Home() {
     }
   };
   
-  if (authLoading || dataLoading) {
+  if (authLoading) {
     return (
       <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh]">
         <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
         <p className="text-gray-500 font-medium">লোড হচ্ছে...</p>
+      </div>
+    );
+  }
+
+  if (dataLoading) {
+    return (
+      <div suppressHydrationWarning className="w-full space-y-8 pb-16 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-2">
+          <div className="space-y-2.5">
+            <div className="h-8 bg-gray-200 rounded-2xl w-48"></div>
+            <div className="h-4 bg-gray-150 rounded-xl w-64"></div>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 md:pb-0">
+            <div className="h-11 bg-gray-200 rounded-xl w-28 flex-shrink-0"></div>
+            <div className="h-11 bg-gray-200 rounded-xl w-32 flex-shrink-0"></div>
+          </div>
+        </div>
+
+        {/* Global Month Statistics Card Skeleton */}
+        <div className="bg-gray-100/40 rounded-[2.5rem] p-6 md:p-8 space-y-8 border border-gray-150">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-gray-200 rounded-2xl"></div>
+            <div className="space-y-2">
+              <div className="h-6 bg-gray-200 rounded-lg w-40"></div>
+              <div className="h-4 bg-gray-150 rounded-md w-28"></div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
+            {[...Array(7)].map((_, i) => (
+              <div key={i} className="bg-white p-4 rounded-xl space-y-2 border border-gray-100">
+                <div className="h-3 bg-gray-200 rounded w-14"></div>
+                <div className="h-5 bg-gray-250 rounded w-16"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Grid layout skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8 space-y-8">
+            <div className="bg-white border border-gray-100 rounded-3xl p-6 h-64 flex flex-col justify-between">
+              <div className="h-6 bg-gray-200 rounded-lg w-36"></div>
+              <div className="space-y-3">
+                <div className="h-12 bg-gray-100 rounded-2xl w-full"></div>
+                <div className="h-12 bg-gray-100 rounded-2xl w-full"></div>
+              </div>
+            </div>
+            <div className="bg-white border border-gray-100 rounded-3xl p-6 h-48 flex flex-col justify-between">
+              <div className="h-6 bg-gray-200 rounded-lg w-40"></div>
+              <div className="h-12 bg-gray-150 rounded-2xl w-full"></div>
+            </div>
+          </div>
+          <div className="lg:col-span-4 space-y-8">
+            <div className="bg-white border border-gray-100 rounded-3xl p-6 h-40 flex flex-col justify-between">
+              <div className="h-6 bg-gray-200 rounded-lg w-32"></div>
+              <div className="h-12 bg-gray-150 rounded-2xl w-full"></div>
+            </div>
+            <div className="bg-white border border-gray-100 rounded-3xl p-6 h-48 flex flex-col justify-between">
+              <div className="h-6 bg-gray-200 rounded-lg w-48"></div>
+              <div className="h-12 bg-gray-150 rounded-2xl w-full"></div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -457,13 +521,12 @@ export default function Home() {
   });
 
   // Find a notice posted in the last 3 days
-  const getRecentNoticeAlert = () => {
+  const recentNotice = useMemo(() => {
     if (!notices || notices.length === 0) return null;
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
     return notices.find(n => new Date(n.createdAt) >= threeDaysAgo);
-  };
-  const recentNotice = getRecentNoticeAlert();
+  }, [notices]);
 
   const hour = new Date().getHours();
   let greeting = 'শুভ সকাল';
@@ -471,20 +534,27 @@ export default function Home() {
   else if (hour >= 17 && hour < 20) greeting = 'শুভ সন্ধ্যা';
   else if (hour >= 20 || hour < 5) greeting = 'শুভ রাত্রি';
 
-  // Budget spent health calculator
-  const spentPercentage = globalStats.totalDeposit > 0 ? (globalStats.totalExpense / globalStats.totalDeposit) * 100 : 0;
-  let healthStatus = "চমৎকার (Safe)";
-  let healthColor = "text-emerald-600 bg-emerald-50 border-emerald-100";
-  let progressColor = "bg-emerald-500";
-  if (spentPercentage > 70 && spentPercentage <= 90) {
-    healthStatus = "সতর্কতা (Warning)";
-    healthColor = "text-amber-600 bg-amber-50 border-amber-100";
-    progressColor = "bg-amber-500";
-  } else if (spentPercentage > 90) {
-    healthStatus = "বাজেট শেষ (Alert)";
-    healthColor = "text-rose-600 bg-rose-50 border-rose-100";
-    progressColor = "bg-rose-500";
-  }
+  // Budget spent health calculator (Memoized)
+  const budgetHealth = useMemo(() => {
+    const totalDeposit = globalStats.totalDeposit || 0;
+    const totalExpense = globalStats.totalExpense || 0;
+    const spentPercentage = totalDeposit > 0 ? (globalStats.totalExpense / totalDeposit) * 100 : 0;
+    let healthStatus = "চমৎকার (Safe)";
+    let healthColor = "text-emerald-600 bg-emerald-50 border-emerald-100";
+    let progressColor = "bg-emerald-500";
+    if (spentPercentage > 70 && spentPercentage <= 90) {
+      healthStatus = "সতর্কতা (Warning)";
+      healthColor = "text-amber-600 bg-amber-50 border-amber-100";
+      progressColor = "bg-amber-500";
+    } else if (spentPercentage > 90) {
+      healthStatus = "বাজেট শেষ (Alert)";
+      healthColor = "text-rose-600 bg-rose-50 border-rose-100";
+      progressColor = "bg-rose-500";
+    }
+    return { spentPercentage, healthStatus, healthColor, progressColor };
+  }, [globalStats.totalDeposit, globalStats.totalExpense]);
+
+  const { spentPercentage, healthStatus, healthColor, progressColor } = budgetHealth;
 
   return (
     <div suppressHydrationWarning className="w-full space-y-8 pb-16">
