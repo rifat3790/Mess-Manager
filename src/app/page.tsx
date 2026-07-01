@@ -1467,7 +1467,121 @@ export default function Home() {
              </div>
           </div>
 
-          {/* Leaderboard Achievements Widget */}
+          {/* Smart Budget Advisor Card (Unique Premium Feature) */}
+          {myStats && myStats.totalCost !== undefined && (
+             <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
+                <div suppressHydrationWarning className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                   <Sparkles className="w-24 h-24 text-indigo-600" />
+                </div>
+
+                <div suppressHydrationWarning className="relative z-10 flex-1 flex flex-col space-y-4">
+                  <h3 className="font-extrabold text-gray-955 text-base flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-500" />
+                    স্মার্ট বাজেট অ্যাডভাইজর
+                  </h3>
+                  
+                  {(() => {
+                    const elapsedDays = Math.max(1, new Date().getDate());
+                    const dailyAvg = myStats.totalCost / elapsedDays;
+                    const projectedCost = dailyAvg * 30;
+                    const daysLeft = dailyAvg > 0 && myStats.balance > 0 ? Math.floor(myStats.balance / dailyAvg) : 0;
+                    
+                    let adviceTitle = "বাজেট ব্যালেন্স নিরাপদ ✅";
+                    let adviceDesc = `বর্তমান খরচ অনুযায়ী এই মাস আপনার ব্যালেন্স পর্যাপ্ত আছে। আপনার জমাকৃত টাকায় আরও আনুমানিক ${daysLeft} দিন চলবে।`;
+                    let adviceBg = "bg-emerald-50 border-emerald-100 text-emerald-800";
+                    let badgeIcon = "👍";
+
+                    if (myStats.balance <= 0) {
+                      adviceTitle = "ব্যালেন্স শেষ / ঋণাত্মক ⚠️";
+                      adviceDesc = "আপনার ব্যালেন্স শেষ হয়ে গেছে। মেসের মিল ও হিসাব সচল রাখতে দ্রুত টাকা জমা দিন।";
+                      adviceBg = "bg-rose-50 border-rose-100 text-rose-800";
+                      badgeIcon = "🚨";
+                    } else if (daysLeft <= 5) {
+                      adviceTitle = "দ্রুত ব্যালেন্স শেষ হচ্ছে ⏳";
+                      adviceDesc = `সতর্কতা! আপনার বর্তমান খরচ অনুযায়ী আগামী ${daysLeft} দিনের মধ্যে ব্যালেন্স শেষ হতে পারে।`;
+                      adviceBg = "bg-amber-50 border-amber-100 text-amber-800";
+                      badgeIcon = "⚠️";
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-gray-50/80 p-3 rounded-2xl border border-gray-100">
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">দৈনিক গড় খরচ</p>
+                            <p className="text-base font-black text-gray-900 mt-1">{dailyAvg.toFixed(1)} ৳</p>
+                          </div>
+                          <div className="bg-gray-50/80 p-3 rounded-2xl border border-gray-100">
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">মাসিক আনুমানিক খরচ</p>
+                            <p className="text-base font-black text-gray-900 mt-1">{projectedCost.toFixed(0)} ৳</p>
+                          </div>
+                        </div>
+
+                        <div className={cn("p-4 rounded-2xl border text-xs font-bold leading-relaxed flex items-start gap-2.5", adviceBg)}>
+                          <span className="text-lg flex-shrink-0">{badgeIcon}</span>
+                          <div>
+                            <p className="font-extrabold text-[13px] mb-0.5">{adviceTitle}</p>
+                            <p className="text-[11px] opacity-90">{adviceDesc}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+             </div>
+           )}
+
+           {/* Cost Distribution Chart Card (Unique Premium Feature) */}
+           {myStats && myStats.totalCost > 0 && (
+             <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
+               <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
+                 <Receipt className="w-5 h-5 text-indigo-500" />
+                 আমার খরচ বিভাজন
+               </h3>
+
+               {(() => {
+                 const total = myStats.mealCost + myStats.jointCost + myStats.singleCost || 1;
+                 const mealPct = Math.round((myStats.mealCost / total) * 100);
+                 const jointPct = Math.round((myStats.jointCost / total) * 100);
+                 const singlePct = Math.round((myStats.singleCost / total) * 100);
+
+                 return (
+                   <div className="space-y-4 text-xs font-bold text-gray-700">
+                     <div className="space-y-1.5">
+                       <div className="flex justify-between items-center text-[10px]">
+                         <span className="flex items-center gap-1.5"><Utensils className="w-3.5 h-3.5 text-orange-500" /> মিল বাবদ খরচ ({mealPct}%)</span>
+                         <span className="text-gray-900 font-extrabold">{myStats.mealCost.toFixed(0)} ৳</span>
+                       </div>
+                       <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                         <div className="h-full bg-orange-500 transition-all duration-500" style={{ width: `${mealPct}%` }}></div>
+                       </div>
+                     </div>
+
+                     <div className="space-y-1.5">
+                       <div className="flex justify-between items-center text-[10px]">
+                         <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-indigo-500" /> যৌথ মেস খরচ ({jointPct}%)</span>
+                         <span className="text-gray-900 font-extrabold">{myStats.jointCost.toFixed(0)} ৳</span>
+                       </div>
+                       <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                         <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${jointPct}%` }}></div>
+                       </div>
+                     </div>
+
+                     <div className="space-y-1.5">
+                       <div className="flex justify-between items-center text-[10px]">
+                         <span className="flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-teal-500" /> ব্যক্তিগত খরচ ({singlePct}%)</span>
+                         <span className="text-gray-900 font-extrabold">{myStats.singleCost.toFixed(0)} ৳</span>
+                       </div>
+                       <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                         <div className="h-full bg-teal-500 transition-all duration-500" style={{ width: `${singlePct}%` }}></div>
+                       </div>
+                     </div>
+                   </div>
+                 );
+               })()}
+             </div>
+           )}
+
+           {/* Leaderboard Achievements Widget */}
           <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
             <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
               <Crown className="w-5 h-5 text-amber-500" />
