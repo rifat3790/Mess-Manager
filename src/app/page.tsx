@@ -29,7 +29,12 @@ import {
   ChefHat,
   Bookmark,
   ChevronRight,
-  Calculator
+  Calculator,
+  Activity,
+  Phone,
+  Copy,
+  Info,
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -50,6 +55,7 @@ import {
   checkAndNotifyLowBalance
 } from './actions/dataActions';
 import { getBazaarSchedules } from './actions/bazaarActions';
+import { getNotifications } from './actions/notificationActions';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 
@@ -96,6 +102,14 @@ export default function Home() {
   const [breakfastRating, setBreakfastRating] = useState<number>(0);
   const [lunchRating, setLunchRating] = useState<number>(0);
   const [dinnerRating, setDinnerRating] = useState<number>(0);
+
+  // Future Balance Projector
+  const [estMeals, setEstMeals] = useState<string>('');
+  const [estSingleExp, setEstSingleExp] = useState<string>('');
+  
+  // Live Notifications Feed
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const formatSafeDate = (dateVal: any, formatOpts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' }) => {
     if (!dateVal) return 'অজানা তারিখ';
@@ -147,13 +161,18 @@ export default function Home() {
     }
     
     try {
-      const [res, scheduleRes] = await Promise.all([
+      const [res, scheduleRes, notificationRes] = await Promise.all([
         getDashboardData(),
-        getBazaarSchedules()
+        getBazaarSchedules(),
+        getNotifications(mongoUser._id)
       ]);
 
       if (scheduleRes.success) {
         setBazaarSchedules(scheduleRes.schedules || []);
+      }
+
+      if (notificationRes.success) {
+        setNotifications(notificationRes.notifications || []);
       }
 
       if (res.success) {
@@ -1831,6 +1850,209 @@ export default function Home() {
                       ? leaderboard.negativeList.map(m => m.name?.split(' ')[0] || 'ইউজার').join(', ') 
                       : 'সবাই প্লাস ব্যালেন্সে!'}
                   </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Future Balance Projector Widget */}
+          {myStats && globalStats && (
+            <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50 flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                <Calculator className="w-24 h-24 text-indigo-600" />
+              </div>
+              
+              <div className="relative z-10 space-y-4">
+                <h3 className="font-extrabold text-gray-955 text-base flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-indigo-500" />
+                  ব্যালেন্স প্রজেকশন ক্যালকুলেটর
+                </h3>
+                <p className="text-[10px] text-gray-400 font-bold leading-relaxed">
+                  বাকি দিনগুলোর আনুমানিক মিল দিয়ে চেক করুন মাসের শেষে আপনার সম্ভাব্য ব্যালেন্স এবং বাজেট ঘাটতি।
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">বাকি মিল সংখ্যা</label>
+                    <input 
+                      type="number"
+                      value={estMeals}
+                      onChange={(e) => setEstMeals(e.target.value)}
+                      placeholder="যেমন: ১৫"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-200"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">অতিরিক্ত একক খরচ</label>
+                    <input 
+                      type="number"
+                      value={estSingleExp}
+                      onChange={(e) => setEstSingleExp(e.target.value)}
+                      placeholder="যেমন: ২০০ ৳"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-200"
+                    />
+                  </div>
+                </div>
+
+                {/* Projection Results */}
+                {(() => {
+                  const currentMeals = myStats.totalMeal || 0;
+                  const currentDeposit = myStats.deposit || 0;
+                  const currentSingle = myStats.singleCost || 0;
+                  const currentJoint = myStats.jointCost || 0;
+                  const mealRate = globalStats.mealRate || 0;
+
+                  const remainingMealsVal = parseFloat(estMeals) || 0;
+                  const extraSingleVal = parseFloat(estSingleExp) || 0;
+
+                  const projectedMeals = currentMeals + remainingMealsVal;
+                  const projectedMealCost = projectedMeals * mealRate;
+                  const projectedSingleCost = currentSingle + extraSingleVal;
+                  
+                  const projectedTotalCost = projectedMealCost + currentJoint + projectedSingleCost;
+                  const projectedBalance = currentDeposit - projectedTotalCost;
+                  const shortfall = projectedBalance < 0 ? Math.abs(projectedBalance) : 0;
+
+                  return (
+                    <div className="space-y-3 pt-2 mt-2 border-t border-gray-100 text-xs font-bold">
+                      <div className="flex justify-between text-gray-500 text-[10px]">
+                        <span>প্রজেক্টেড মিল খরচ:</span>
+                        <span className="text-gray-900 font-extrabold">{projectedMealCost.toFixed(1)} ৳</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500 text-[10px]">
+                        <span>প্রজেক্টেড মোট খরচ:</span>
+                        <span className="text-gray-900 font-extrabold">{projectedTotalCost.toFixed(0)} ৳</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3.5 bg-gray-50/50 rounded-2xl border border-gray-100 mt-2">
+                        <div>
+                          <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">সম্ভাব্য শেষ ব্যালেন্স</p>
+                          <p className={`text-base font-black mt-1 ${projectedBalance >= 0 ? 'text-emerald-600' : 'text-rose-600 animate-pulse'}`}>
+                            {projectedBalance >= 0 ? '+' : ''}{projectedBalance.toFixed(0)} ৳
+                          </p>
+                        </div>
+                        {shortfall > 0 && (
+                          <div className="text-right">
+                            <span className="inline-block px-2 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-md text-[9px] font-black uppercase tracking-wider animate-pulse">ঘাটতি</span>
+                            <p className="text-xs font-black text-rose-700 mt-0.5">জমা করতে হবে: {shortfall.toFixed(0)} ৳</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {shortfall > 0 && (
+                        <button 
+                          onClick={() => router.push('/deposit')}
+                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-center block transition-all mt-2 text-[10px] tracking-wide shadow-md"
+                        >
+                          দ্রুত টাকা জমা দিন
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Live Mess Update Feed */}
+          {notifications && notifications.length > 0 && (
+            <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50">
+              <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-indigo-500" />
+                মেস ফিড (Live Updates)
+              </h3>
+              
+              <div className="space-y-4 max-h-[250px] overflow-y-auto pr-1">
+                {notifications.slice(0, 5).map((notif) => (
+                  <div key={notif._id} className="relative pl-6 border-l border-gray-100 pb-1.5 last:pb-0">
+                    <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 bg-indigo-500 rounded-full border border-white shadow-sm animate-pulse" />
+                    <div className="text-xs font-bold text-gray-800">
+                      <p className="text-[9px] text-gray-400 font-semibold">{formatSafeDate(notif.createdAt)}</p>
+                      <p className="font-extrabold text-gray-900 mt-0.5 capitalize">{notif.title}</p>
+                      <p className="text-[10px] text-gray-500 font-medium mt-1 leading-relaxed">{notif.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Emergency Contacts & Helpdesk */}
+          <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50">
+            <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
+              <Phone className="w-5 h-5 text-indigo-500" />
+              মেস হেল্পডেস্ক ও জরুরি কন্টাক্টস
+            </h3>
+            
+            <div className="space-y-3.5 text-xs font-bold">
+              <div className="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
+                <div>
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">মেস ম্যানেজার</p>
+                  <p className="text-gray-900 font-extrabold text-sm mt-0.5">Md Refayet Hossen</p>
+                </div>
+                <div className="flex gap-2">
+                  <a href="tel:+8801700000000" className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors">
+                    <Phone className="w-4 h-4" />
+                  </a>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText("+8801700000000");
+                      toast.success("নম্বর কপি হয়েছে!");
+                    }} 
+                    className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
+                <div>
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">সহকারী ম্যানেজার</p>
+                  <p className="text-gray-900 font-extrabold text-sm mt-0.5">MD Rifat</p>
+                </div>
+                <div className="flex gap-2">
+                  <a href="tel:+8801900000000" className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors">
+                    <Phone className="w-4 h-4" />
+                  </a>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText("+8801900000000");
+                      toast.success("নম্বর কপি হয়েছে!");
+                    }} 
+                    className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
+                <div>
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">মেস বাবুর্চি (Cook)</p>
+                  <p className="text-gray-900 font-extrabold text-sm mt-0.5">Babul Bhai</p>
+                </div>
+                <div className="flex gap-2">
+                  <a href="tel:+8801800000000" className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors">
+                    <Phone className="w-4 h-4" />
+                  </a>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText("+8801800000000");
+                      toast.success("নম্বর কপি হয়েছে!");
+                    }} 
+                    className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-amber-50 text-amber-900 border border-amber-100/50 rounded-2xl text-[11px] font-semibold leading-relaxed flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-extrabold text-amber-955 mb-0.5">গুরুত্বপূর্ণ নোটিফিকেশন নিয়ম:</h4>
+                  <p className="opacity-90 text-[10px]">প্রতিদিনের মিল অফ/অন করার সর্বশেষ সময় রাত ১০:০০ টা। বাজার শিডিউল অনুযায়ী দায়িত্বপ্রাপ্ত বাজারকারীকে সকাল ৮:০০ টার মধ্যে বাজারে পৌঁছানোর অনুরোধ করা হচ্ছে।</p>
                 </div>
               </div>
             </div>
