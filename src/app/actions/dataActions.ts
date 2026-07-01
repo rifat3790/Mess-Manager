@@ -36,17 +36,23 @@ export async function addMeal(monthId: string, userId: string, date: Date, mealC
     const user = await User.findById(userId);
     const month = await Month.findById(monthId);
 
-    await syncDataToSheet(month.sheetTabName, {
-      date: new Date(date).toLocaleDateString(),
-      memberName: user.name,
-      type: 'Meal',
-      description: 'Daily Meal',
-      amount: mealCount,
-      time: new Date().toLocaleTimeString(),
-      _id: meal._id.toString()
-    });
+    if (month && user) {
+      try {
+        await syncDataToSheet(month.sheetTabName, {
+          date: new Date(date).toLocaleDateString(),
+          memberName: user.name,
+          type: 'Meal',
+          description: 'Daily Meal',
+          amount: mealCount,
+          time: new Date().toLocaleTimeString(),
+          _id: meal._id.toString()
+        });
+      } catch (sheetErr) {
+        console.error("Sheets sync error in addMeal:", sheetErr);
+      }
+    }
 
-    await createNotification("নতুন মিল যুক্ত করা হয়েছে", `${user.name}-এর জন্য ${mealCount} টি মিল যুক্ত করা হয়েছে।`);
+    await createNotification("নতুন মিল যুক্ত করা হয়েছে", `${user?.name || 'মেম্বার'}-এর জন্য ${mealCount} টি মিল যুক্ত করা হয়েছে।`);
 
     revalidatePath('/', 'layout');
     return { success: true, meal: JSON.parse(JSON.stringify(meal)) };
@@ -491,6 +497,9 @@ export async function addBulkMeals(monthId: string, date: Date, mealsData: { use
     for (const data of mealsData) {
       if (data.mealCount === 0) continue; // Skip if no meals
 
+      const user = await User.findById(data.userId);
+      const month = await Month.findById(monthId);
+
       const existing = await Meal.findOne({
         monthId,
         userId: data.userId,
@@ -504,19 +513,22 @@ export async function addBulkMeals(monthId: string, date: Date, mealsData: { use
         existing.mealCount += data.mealCount;
         await existing.save();
         
-        const user = await User.findById(data.userId);
-        const month = await Month.findById(monthId);
         if (user && month) {
-          const { updateDataInSheet } = await import('./sheetActions');
-          await updateDataInSheet(month.sheetTabName, existing._id.toString(), {
-            date: new Date(date).toLocaleDateString(),
-            memberName: user.name,
-            type: 'Meal',
-            description: 'Daily Meal',
-            amount: existing.mealCount,
-            time: new Date().toLocaleTimeString(),
-          });
+          try {
+            const { updateDataInSheet } = await import('./sheetActions');
+            await updateDataInSheet(month.sheetTabName, existing._id.toString(), {
+              date: new Date(date).toLocaleDateString(),
+              memberName: user.name,
+              type: 'Meal',
+              description: 'Daily Meal',
+              amount: existing.mealCount,
+              time: new Date().toLocaleTimeString(),
+            });
+          } catch (sheetErr) {
+            console.error("Sheets update error in addBulkMeals:", sheetErr);
+          }
         }
+        await createNotification("নতুন মিল যুক্ত করা হয়েছে", `${user?.name || 'মেম্বার'}-এর জন্য ${data.mealCount} টি মিল যুক্ত করা হয়েছে (বর্তমান মোট: ${existing.mealCount} টি)।`);
       } else {
         const newMeal = new Meal({ 
           monthId, 
@@ -529,20 +541,23 @@ export async function addBulkMeals(monthId: string, date: Date, mealsData: { use
         });
         await newMeal.save();
         
-        const user = await User.findById(data.userId);
-        const month = await Month.findById(monthId);
         if (user && month) {
-          const { syncDataToSheet } = await import('./sheetActions');
-          await syncDataToSheet(month.sheetTabName, {
-            date: new Date(date).toLocaleDateString(),
-            memberName: user.name,
-            type: 'Meal',
-            description: 'Daily Meal',
-            amount: data.mealCount,
-            time: new Date().toLocaleTimeString(),
-            _id: newMeal._id.toString()
-          });
+          try {
+            const { syncDataToSheet } = await import('./sheetActions');
+            await syncDataToSheet(month.sheetTabName, {
+              date: new Date(date).toLocaleDateString(),
+              memberName: user.name,
+              type: 'Meal',
+              description: 'Daily Meal',
+              amount: data.mealCount,
+              time: new Date().toLocaleTimeString(),
+              _id: newMeal._id.toString()
+            });
+          } catch (sheetErr) {
+            console.error("Sheets sync error in addBulkMeals:", sheetErr);
+          }
         }
+        await createNotification("নতুন মিল যুক্ত করা হয়েছে", `${user?.name || 'মেম্বার'}-এর জন্য ${data.mealCount} টি মিল যুক্ত করা হয়েছে।`);
       }
     }
 
