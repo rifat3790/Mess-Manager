@@ -105,49 +105,54 @@ export default function Home() {
       return;
     }
     
-    const [res, scheduleRes] = await Promise.all([
-      getDashboardData(),
-      getBazaarSchedules()
-    ]);
+    try {
+      const [res, scheduleRes] = await Promise.all([
+        getDashboardData(),
+        getBazaarSchedules()
+      ]);
 
-    if (scheduleRes.success) {
-      setBazaarSchedules(scheduleRes.schedules || []);
-    }
+      if (scheduleRes.success) {
+        setBazaarSchedules(scheduleRes.schedules || []);
+      }
 
-    if (res.success) {
-      if (res.stats) {
-        setGlobalStats(res.stats);
-        setCustomMealRate(res.stats.mealRate ? res.stats.mealRate.toFixed(2) : '40.00');
-        setAllMembers(res.members || []);
-        const me = res.members.find((m: any) => m._id === mongoUser._id);
-        if (me) {
-          setMyStats(me);
-          if (me.balance <= 0) {
-            checkAndNotifyLowBalance(mongoUser._id, me.balance);
-            const dismissed = sessionStorage.getItem('balanceWarningDismissed');
-            if (dismissed !== 'true') {
-              setShowBalanceModal(true);
+      if (res.success) {
+        if (res.stats) {
+          setGlobalStats(res.stats);
+          setCustomMealRate(res.stats.mealRate ? res.stats.mealRate.toFixed(2) : '40.00');
+          setAllMembers(res.members || []);
+          const me = res.members.find((m: any) => m._id === mongoUser._id);
+          if (me) {
+            setMyStats(me);
+            if (me.balance <= 0) {
+              checkAndNotifyLowBalance(mongoUser._id, me.balance);
+              const dismissed = sessionStorage.getItem('balanceWarningDismissed');
+              if (dismissed !== 'true') {
+                setShowBalanceModal(true);
+              }
             }
+          } else {
+            setMyStats({ totalMeal: 0, deposit: 0, totalCost: 0, balance: 0 });
           }
         } else {
+          setGlobalStats({
+            monthName: 'কোনো চলমান মাস নেই',
+            balance: 0,
+            totalDeposit: 0,
+            totalMeals: 0,
+            mealExpenses: 0,
+            mealRate: 0,
+            singleExpenses: 0,
+            jointExpenses: 0
+          });
           setMyStats({ totalMeal: 0, deposit: 0, totalCost: 0, balance: 0 });
+          setAllMembers([]);
         }
-      } else {
-        setGlobalStats({
-          monthName: 'কোনো চলমান মাস নেই',
-          balance: 0,
-          totalDeposit: 0,
-          totalMeals: 0,
-          mealExpenses: 0,
-          mealRate: 0,
-          singleExpenses: 0,
-          jointExpenses: 0
-        });
-        setMyStats({ totalMeal: 0, deposit: 0, totalCost: 0, balance: 0 });
-        setAllMembers([]);
       }
+    } catch (err: any) {
+      console.error("Error fetching dashboard data:", err);
+    } finally {
+      setDataLoading(false);
     }
-    setDataLoading(false);
   }
 
   async function fetchUserMeals() {

@@ -354,15 +354,15 @@ export async function getDashboardData() {
     const numUsers = users.length;
 
     const memberStats = users.map(user => {
-      const userMeals = meals.filter(m => m.userId.toString() === user._id.toString()).reduce((sum, m) => sum + m.mealCount, 0);
-      const userDeposit = deposits.filter(d => d.userId.toString() === user._id.toString()).reduce((sum, d) => sum + d.amount, 0);
+      const userMeals = meals.filter(m => m.userId?.toString() === user._id.toString()).reduce((sum, m) => sum + m.mealCount, 0);
+      const userDeposit = deposits.filter(d => d.userId?.toString() === user._id.toString()).reduce((sum, d) => sum + d.amount, 0);
       const userSingleExpense = expenses.filter(e => e.type === 'Single' && e.userId?.toString() === user._id.toString()).reduce((sum, e) => sum + e.amount, 0);
       
       // Calculate user's specific joint cost
       const userJointExpenses = expenses.filter(e => {
         if (e.type !== 'Joint') return false;
         if (!e.sharedBetween || e.sharedBetween.length === 0) return true;
-        return e.sharedBetween.some((id: any) => id.toString() === user._id.toString());
+        return e.sharedBetween.some((id: any) => id?.toString() === user._id.toString());
       });
 
       const userJointCost = userJointExpenses.reduce((sum, e) => {
@@ -434,15 +434,15 @@ export async function getAllMonthsReportData() {
       const numUsers = users.length;
 
       const memberStats = users.map(user => {
-        const userMeals = meals.filter(m => m.userId.toString() === user._id.toString()).reduce((sum, m) => sum + m.mealCount, 0);
-        const userDeposit = deposits.filter(d => d.userId.toString() === user._id.toString()).reduce((sum, d) => sum + d.amount, 0);
+        const userMeals = meals.filter(m => m.userId?.toString() === user._id.toString()).reduce((sum, m) => sum + m.mealCount, 0);
+        const userDeposit = deposits.filter(d => d.userId?.toString() === user._id.toString()).reduce((sum, d) => sum + d.amount, 0);
         const userSingleExpense = expenses.filter(e => e.type === 'Single' && e.userId?.toString() === user._id.toString()).reduce((sum, e) => sum + e.amount, 0);
         
         // Calculate user's specific joint cost
         const userJointExpenses = expenses.filter(e => {
           if (e.type !== 'Joint') return false;
           if (!e.sharedBetween || e.sharedBetween.length === 0) return true;
-          return e.sharedBetween.some((id: any) => id.toString() === user._id.toString());
+          return e.sharedBetween.some((id: any) => id?.toString() === user._id.toString());
         });
 
         const userJointCost = userJointExpenses.reduce((sum, e) => {
