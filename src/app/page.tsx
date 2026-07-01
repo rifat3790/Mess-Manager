@@ -108,6 +108,36 @@ export default function Home() {
     }
   };
 
+  // Find a notice posted in the last 3 days (Memoized at top-level)
+  const recentNotice = useMemo(() => {
+    if (!notices || notices.length === 0) return null;
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    return notices.find(n => new Date(n.createdAt) >= threeDaysAgo);
+  }, [notices]);
+
+  // Budget spent health calculator (Memoized at top-level)
+  const budgetHealth = useMemo(() => {
+    const totalDeposit = globalStats?.totalDeposit || 0;
+    const totalExpense = globalStats?.totalExpense || 0;
+    const spentPercentage = totalDeposit > 0 ? (totalExpense / totalDeposit) * 100 : 0;
+    let healthStatus = "চমৎকার (Safe)";
+    let healthColor = "text-emerald-600 bg-emerald-50 border-emerald-100";
+    let progressColor = "bg-emerald-500";
+    if (spentPercentage > 70 && spentPercentage <= 90) {
+      healthStatus = "সতর্কতা (Warning)";
+      healthColor = "text-amber-600 bg-amber-50 border-amber-100";
+      progressColor = "bg-amber-500";
+    } else if (spentPercentage > 90) {
+      healthStatus = "বাজেট শেষ (Alert)";
+      healthColor = "text-rose-600 bg-rose-50 border-rose-100";
+      progressColor = "bg-rose-500";
+    }
+    return { spentPercentage, healthStatus, healthColor, progressColor };
+  }, [globalStats?.totalDeposit, globalStats?.totalExpense]);
+
+  const { spentPercentage, healthStatus, healthColor, progressColor } = budgetHealth;
+
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
   async function fetchDashboardData() {
@@ -567,41 +597,11 @@ export default function Home() {
     return matchesSearch;
   });
 
-  // Find a notice posted in the last 3 days
-  const recentNotice = useMemo(() => {
-    if (!notices || notices.length === 0) return null;
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-    return notices.find(n => new Date(n.createdAt) >= threeDaysAgo);
-  }, [notices]);
-
   const hour = new Date().getHours();
   let greeting = 'শুভ সকাল';
   if (hour >= 12 && hour < 17) greeting = 'শুভ অপরাহ্ন';
   else if (hour >= 17 && hour < 20) greeting = 'শুভ সন্ধ্যা';
   else if (hour >= 20 || hour < 5) greeting = 'শুভ রাত্রি';
-
-  // Budget spent health calculator (Memoized)
-  const budgetHealth = useMemo(() => {
-    const totalDeposit = globalStats?.totalDeposit || 0;
-    const totalExpense = globalStats?.totalExpense || 0;
-    const spentPercentage = totalDeposit > 0 ? (totalExpense / totalDeposit) * 100 : 0;
-    let healthStatus = "চমৎকার (Safe)";
-    let healthColor = "text-emerald-600 bg-emerald-50 border-emerald-100";
-    let progressColor = "bg-emerald-500";
-    if (spentPercentage > 70 && spentPercentage <= 90) {
-      healthStatus = "সতর্কতা (Warning)";
-      healthColor = "text-amber-600 bg-amber-50 border-amber-100";
-      progressColor = "bg-amber-500";
-    } else if (spentPercentage > 90) {
-      healthStatus = "বাজেট শেষ (Alert)";
-      healthColor = "text-rose-600 bg-rose-50 border-rose-100";
-      progressColor = "bg-rose-500";
-    }
-    return { spentPercentage, healthStatus, healthColor, progressColor };
-  }, [globalStats?.totalDeposit, globalStats?.totalExpense]);
-
-  const { spentPercentage, healthStatus, healthColor, progressColor } = budgetHealth;
 
   return (
     <div suppressHydrationWarning className="w-full space-y-8 pb-16">
