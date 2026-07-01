@@ -97,7 +97,6 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
         { name: 'সকল মাসের হিসাব', icon: Files, href: '/report/all' },
         { name: 'নতুন মাস শুরু করুন', icon: CalendarPlus, href: '/month/new' },
         { name: 'মেস মেম্বার', icon: Users, href: '/members' },
-        { name: 'অ্যাডমিন', icon: ShieldCheck, href: '/admin' },
         { name: 'বাজারের তারিখ', icon: CalendarDays, href: '/bazaar' },
         { name: 'মেস চ্যাট', icon: MessageSquare, href: '/chat' }
       ];
@@ -105,6 +104,7 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
 
     if (role === 'Super Admin') {
       items.push(
+        { name: 'অ্যাডমিন', icon: ShieldCheck, href: '/admin' },
         { name: 'ম্যানেজার পরিবর্তন', icon: UserCog, href: '/manager' },
         { name: 'মেস সেটিংস ও ডিলিট', icon: Settings, href: '/settings' }
       );

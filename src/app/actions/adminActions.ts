@@ -7,6 +7,7 @@ import Deposit from "@/models/Deposit";
 import Month from "@/models/Month";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
+import mongoose from "mongoose";
 
 export async function wipeDatabase(confirmationCode: string) {
   try {
@@ -63,6 +64,46 @@ export async function setActiveMonth(monthId: string) {
     // Set the specific one to active
     await Month.findByIdAndUpdate(monthId, { isActive: true });
     return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getDatabaseStats() {
+  try {
+    await connectToDatabase();
+    
+    if (!mongoose.connection.db) {
+      throw new Error("Database connection not ready");
+    }
+    
+    const stats = await mongoose.connection.db.stats();
+    
+    const totalLimitBytes = 512 * 1024 * 1024; // 512 MB
+    const storageSizeBytes = stats.storageSize || 0;
+    const dataSizeBytes = stats.dataSize || 0;
+    const indexSizeBytes = stats.indexSize || 0;
+    const totalUsedBytes = storageSizeBytes + indexSizeBytes;
+    
+    const percentUsed = (totalUsedBytes / totalLimitBytes) * 100;
+    const freeSpaceBytes = Math.max(totalLimitBytes - totalUsedBytes, 0);
+
+    return {
+      success: true,
+      stats: {
+        dbName: stats.db,
+        collectionsCount: stats.collections,
+        objectsCount: stats.objects,
+        avgObjSizeBytes: stats.avgObjSize || 0,
+        dataSizeBytes,
+        storageSizeBytes,
+        indexSizeBytes,
+        totalUsedBytes,
+        totalLimitBytes,
+        percentUsed: Math.min(percentUsed, 100).toFixed(2),
+        freeSpaceBytes
+      }
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
