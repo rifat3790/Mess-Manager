@@ -567,9 +567,9 @@ export default function Home() {
 
   // Budget spent health calculator (Memoized)
   const budgetHealth = useMemo(() => {
-    const totalDeposit = globalStats.totalDeposit || 0;
-    const totalExpense = globalStats.totalExpense || 0;
-    const spentPercentage = totalDeposit > 0 ? (globalStats.totalExpense / totalDeposit) * 100 : 0;
+    const totalDeposit = globalStats?.totalDeposit || 0;
+    const totalExpense = globalStats?.totalExpense || 0;
+    const spentPercentage = totalDeposit > 0 ? (totalExpense / totalDeposit) * 100 : 0;
     let healthStatus = "চমৎকার (Safe)";
     let healthColor = "text-emerald-600 bg-emerald-50 border-emerald-100";
     let progressColor = "bg-emerald-500";
@@ -583,7 +583,7 @@ export default function Home() {
       progressColor = "bg-rose-500";
     }
     return { spentPercentage, healthStatus, healthColor, progressColor };
-  }, [globalStats.totalDeposit, globalStats.totalExpense]);
+  }, [globalStats?.totalDeposit, globalStats?.totalExpense]);
 
   const { spentPercentage, healthStatus, healthColor, progressColor } = budgetHealth;
 
