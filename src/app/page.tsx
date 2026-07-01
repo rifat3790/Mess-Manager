@@ -599,7 +599,7 @@ export default function Home() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-2">
         <div>
           <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
-            {greeting}, {mongoUser.name.split(' ')[0]}! <span className="text-2xl animate-bounce">👋</span>
+            {greeting}, {mongoUser?.name ? mongoUser.name.split(' ')[0] : 'ইউজার'}! <span className="text-2xl animate-bounce">👋</span>
           </h2>
           <p className="text-gray-500 font-medium mt-1 text-sm">
             আজকের মেস সামারি ও আপডেটগুলো একনজরে দেখে নিন।
@@ -1817,7 +1817,7 @@ export default function Home() {
                   <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">লাল তালিকায় যারা (ঋণগ্রস্ত)</p>
                   <p className="text-gray-900 font-bold truncate">
                     {leaderboard.negativeList.length > 0 
-                      ? leaderboard.negativeList.map(m => m.name.split(' ')[0]).join(', ') 
+                      ? leaderboard.negativeList.map(m => m.name?.split(' ')[0] || 'ইউজার').join(', ') 
                       : 'সবাই প্লাস ব্যালেন্সে!'}
                   </p>
                 </div>
