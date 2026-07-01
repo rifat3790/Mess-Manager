@@ -7,6 +7,7 @@ import Deposit from "@/models/Deposit";
 import Month from "@/models/Month";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
+import Contact from "@/models/Contact";
 import mongoose from "mongoose";
 
 export async function wipeDatabase(confirmationCode: string) {
@@ -104,6 +105,77 @@ export async function getDatabaseStats() {
         freeSpaceBytes
       }
     };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getContacts() {
+  try {
+    await connectToDatabase();
+    let contacts = await Contact.find().sort({ createdAt: 1 });
+    
+    // Seed default contacts if empty
+    if (contacts.length === 0) {
+      const defaultContacts = [
+        { designation: "মেস ম্যানেজার", name: "Md Refayet Hossen", phone: "+8801700000000" },
+        { designation: "সহকারী ম্যানেজার", name: "MD Rifat", phone: "+8801900000000" },
+        { designation: "মেস বাবুর্চি (Cook)", name: "Babul Bhai", phone: "+8801800000000" }
+      ];
+      await Contact.create(defaultContacts);
+      contacts = await Contact.find().sort({ createdAt: 1 });
+    }
+    
+    return { success: true, contacts: JSON.parse(JSON.stringify(contacts)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function saveContact(requesterId: string, contactData: { _id?: string; designation: string; name: string; phone: string }) {
+  try {
+    await connectToDatabase();
+    
+    // Authorization check
+    const requester = await User.findById(requesterId);
+    if (!requester || (requester.role !== 'Super Admin' && requester.role !== 'Manager')) {
+      return { success: false, error: 'অনুমতি নেই!' };
+    }
+    
+    if (contactData._id) {
+      // Update existing
+      const updated = await Contact.findByIdAndUpdate(contactData._id, {
+        designation: contactData.designation,
+        name: contactData.name,
+        phone: contactData.phone
+      }, { new: true });
+      return { success: true, contact: JSON.parse(JSON.stringify(updated)) };
+    } else {
+      // Create new
+      const created = await Contact.create({
+        designation: contactData.designation,
+        name: contactData.name,
+        phone: contactData.phone
+      });
+      return { success: true, contact: JSON.parse(JSON.stringify(created)) };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteContact(requesterId: string, contactId: string) {
+  try {
+    await connectToDatabase();
+    
+    // Authorization check
+    const requester = await User.findById(requesterId);
+    if (!requester || (requester.role !== 'Super Admin' && requester.role !== 'Manager')) {
+      return { success: false, error: 'অনুমতি নেই!' };
+    }
+    
+    await Contact.findByIdAndDelete(contactId);
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

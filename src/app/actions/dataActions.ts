@@ -14,6 +14,7 @@ import MealRequest from "@/models/MealRequest";
 import { revalidatePath } from "next/cache";
 import Notice from "@/models/Notice";
 import Menu from "@/models/Menu";
+import MenuRating from "@/models/MenuRating";
 
 export async function addMeal(monthId: string, userId: string, date: Date, mealCount: number) {
   try {
@@ -1219,6 +1220,93 @@ export async function checkAndNotifyLowBalance(userId: string, balance: number) 
     }
 
     return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function submitMenuRating(userId: string, date: Date, type: 'breakfast' | 'lunch' | 'dinner', rating: number) {
+  try {
+    await connectToDatabase();
+    
+    const ratingDate = new Date(date);
+    ratingDate.setHours(0, 0, 0, 0);
+
+    let menuRating = await MenuRating.findOne({ userId, date: ratingDate });
+
+    if (menuRating) {
+      menuRating[type] = rating;
+      await menuRating.save();
+    } else {
+      menuRating = await MenuRating.create({
+        userId,
+        date: ratingDate,
+        [type]: rating
+      });
+    }
+
+    revalidatePath('/', 'layout');
+    return { success: true, rating: JSON.parse(JSON.stringify(menuRating)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getMenuRatings(date: Date, requestingUserId?: string) {
+  try {
+    await connectToDatabase();
+
+    const ratingDate = new Date(date);
+    ratingDate.setHours(0, 0, 0, 0);
+
+    const ratingsList = await MenuRating.find({ date: ratingDate }).populate('userId', 'name role');
+
+    // Calculate averages
+    let bSum = 0, bCount = 0;
+    let lSum = 0, lCount = 0;
+    let dSum = 0, dCount = 0;
+
+    ratingsList.forEach((r) => {
+      if (r.breakfast > 0) {
+        bSum += r.breakfast;
+        bCount++;
+      }
+      if (r.lunch > 0) {
+        lSum += r.lunch;
+        lCount++;
+      }
+      if (r.dinner > 0) {
+        dSum += r.dinner;
+        dCount++;
+      }
+    });
+
+    const averages = {
+      breakfast: bCount > 0 ? parseFloat((bSum / bCount).toFixed(1)) : 0,
+      lunch: lCount > 0 ? parseFloat((lSum / lCount).toFixed(1)) : 0,
+      dinner: dCount > 0 ? parseFloat((dSum / dCount).toFixed(1)) : 0,
+      totalCount: ratingsList.length
+    };
+
+    // Get specific rating of requesting user
+    let userRating = { breakfast: 0, lunch: 0, dinner: 0 };
+    if (requestingUserId) {
+      const myRating = ratingsList.find((r) => r.userId?._id?.toString() === requestingUserId);
+      if (myRating) {
+        userRating = {
+          breakfast: myRating.breakfast || 0,
+          lunch: myRating.lunch || 0,
+          dinner: myRating.dinner || 0
+        };
+      }
+    }
+
+    return { 
+      success: true, 
+      averages, 
+      userRating,
+      allRatings: JSON.parse(JSON.stringify(ratingsList)) 
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

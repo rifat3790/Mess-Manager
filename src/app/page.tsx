@@ -34,7 +34,9 @@ import {
   Phone,
   Copy,
   Info,
-  TrendingUp
+  TrendingUp,
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -52,10 +54,13 @@ import {
   updateTodayMenu,
   getLatestNotices,
   createNotice,
-  checkAndNotifyLowBalance
+  checkAndNotifyLowBalance,
+  submitMenuRating,
+  getMenuRatings
 } from './actions/dataActions';
 import { getBazaarSchedules } from './actions/bazaarActions';
 import { getNotifications } from './actions/notificationActions';
+import { getContacts, saveContact, deleteContact } from './actions/adminActions';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 
@@ -102,6 +107,9 @@ export default function Home() {
   const [breakfastRating, setBreakfastRating] = useState<number>(0);
   const [lunchRating, setLunchRating] = useState<number>(0);
   const [dinnerRating, setDinnerRating] = useState<number>(0);
+  const [menuAverages, setMenuAverages] = useState<{ breakfast: number; lunch: number; dinner: number; totalCount: number }>({ breakfast: 0, lunch: 0, dinner: 0, totalCount: 0 });
+  const [allMenuRatings, setAllMenuRatings] = useState<any[]>([]);
+  const [showRatingsDetailModal, setShowRatingsDetailModal] = useState<boolean>(false);
 
   // Future Balance Projector
   const [estMeals, setEstMeals] = useState<string>('');
@@ -111,6 +119,15 @@ export default function Home() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [popupNotification, setPopupNotification] = useState<any | null>(null);
+
+  // Emergency Contacts state
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [isEditingContact, setIsEditingContact] = useState<boolean>(false);
+  const [selectedContact, setSelectedContact] = useState<any | null>(null);
+  const [contactDesignation, setContactDesignation] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactSubmitLoading, setContactSubmitLoading] = useState(false);
 
   const formatSafeDate = (dateVal: any, formatOpts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' }) => {
     if (!dateVal) return 'অজানা তারিখ';
@@ -162,10 +179,11 @@ export default function Home() {
     }
     
     try {
-      const [res, scheduleRes, notificationRes] = await Promise.all([
+      const [res, scheduleRes, notificationRes, contactsRes] = await Promise.all([
         getDashboardData(),
         getBazaarSchedules(),
-        getNotifications(mongoUser._id)
+        getNotifications(mongoUser._id),
+        getContacts()
       ]);
 
       if (scheduleRes.success) {
@@ -174,6 +192,10 @@ export default function Home() {
 
       if (notificationRes.success) {
         setNotifications(notificationRes.notifications || []);
+      }
+
+      if (contactsRes.success) {
+        setContacts(contactsRes.contacts || []);
       }
 
       if (res.success) {
@@ -241,9 +263,10 @@ export default function Home() {
 
   async function fetchMenuAndNotices() {
     if (mongoUser && mongoUser.role !== 'Pending') {
-      const [menuRes, noticesRes] = await Promise.all([
+      const [menuRes, noticesRes, ratingsRes] = await Promise.all([
         getTodayMenu(),
-        getLatestNotices()
+        getLatestNotices(),
+        getMenuRatings(new Date(), mongoUser._id)
       ]);
       if (menuRes.success && menuRes.menu) {
         setMenu(menuRes.menu);
@@ -253,6 +276,15 @@ export default function Home() {
       }
       if (noticesRes.success) {
         setNotices(noticesRes.notices || []);
+      }
+      if (ratingsRes.success) {
+        setMenuAverages(ratingsRes.averages || { breakfast: 0, lunch: 0, dinner: 0, totalCount: 0 });
+        setAllMenuRatings(ratingsRes.allRatings || []);
+        if (ratingsRes.userRating) {
+          setBreakfastRating(ratingsRes.userRating.breakfast || 0);
+          setLunchRating(ratingsRes.userRating.lunch || 0);
+          setDinnerRating(ratingsRes.userRating.dinner || 0);
+        }
       }
     }
   }
@@ -324,32 +356,23 @@ export default function Home() {
     }
   }, [myMeals]);
 
-  // Load menu ratings from localStorage
-  useEffect(() => {
-    const todayStr = new Date().toDateString();
-    const saved = localStorage.getItem(`menuRatings_${todayStr}`);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.breakfast) setBreakfastRating(parsed.breakfast);
-      if (parsed.lunch) setLunchRating(parsed.lunch);
-      if (parsed.dinner) setDinnerRating(parsed.dinner);
+  const handleRateMenu = async (type: 'breakfast' | 'lunch' | 'dinner', rating: number) => {
+    if (!mongoUser) return;
+    try {
+      const res = await submitMenuRating(mongoUser._id, new Date(), type, rating);
+      if (res.success) {
+        if (type === 'breakfast') setBreakfastRating(rating);
+        if (type === 'lunch') setLunchRating(rating);
+        if (type === 'dinner') setDinnerRating(rating);
+        
+        toast.success('খাবারের রেটিং সফলভাবে দেওয়া হয়েছে!');
+        fetchMenuAndNotices();
+      } else {
+        toast.error(res.error || 'রেটিং দিতে সমস্যা হয়েছে।');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'ভুল হয়েছে।');
     }
-  }, []);
-
-  const handleRateMenu = (type: 'breakfast' | 'lunch' | 'dinner', rating: number) => {
-    const todayStr = new Date().toDateString();
-    const ratings: any = { breakfast: breakfastRating, lunch: lunchRating, dinner: dinnerRating };
-    ratings[type] = rating;
-
-    if (type === 'breakfast') setBreakfastRating(rating);
-    if (type === 'lunch') setLunchRating(rating);
-    if (type === 'dinner') setDinnerRating(rating);
-
-    localStorage.setItem(`menuRatings_${todayStr}`, JSON.stringify({
-      ...ratings,
-      submitted: true
-    }));
-    toast.success('খাবারের রেটিং সফলভাবে দেওয়া হয়েছে!');
   };
 
   // Handler for direct edits (Managers/Admins)
@@ -519,6 +542,59 @@ export default function Home() {
       toast.error(err.message || "ভুল হয়েছে।");
     } finally {
       setNoticeSubmitLoading(false);
+    }
+  };
+
+  // Handle Contact Add/Edit
+  const handleEditContactClick = (contact: any) => {
+    setSelectedContact(contact);
+    setContactDesignation(contact.designation);
+    setContactName(contact.name);
+    setContactPhone(contact.phone);
+    setIsEditingContact(true);
+  };
+
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactDesignation || !contactName || !contactPhone || !mongoUser) return;
+    setContactSubmitLoading(true);
+    try {
+      const res = await saveContact(mongoUser._id, {
+        _id: selectedContact?._id,
+        designation: contactDesignation,
+        name: contactName,
+        phone: contactPhone
+      });
+      if (res.success) {
+        toast.success(selectedContact ? "কন্টাক্ট সফলভাবে এডিট হয়েছে!" : "কন্টাক্ট সফলভাবে যোগ হয়েছে!");
+        setIsEditingContact(false);
+        setSelectedContact(null);
+        setContactDesignation('');
+        setContactName('');
+        setContactPhone('');
+        fetchDashboardData();
+      } else {
+        toast.error(res.error || "সংরক্ষণ করতে সমস্যা হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ভুল হয়েছে।");
+    } finally {
+      setContactSubmitLoading(false);
+    }
+  };
+
+  const handleDeleteContactClick = async (contactId: string) => {
+    if (!mongoUser || !window.confirm("আপনি কি নিশ্চিতভাবে কন্টাক্টটি ডিলিট করতে চান?")) return;
+    try {
+      const res = await deleteContact(mongoUser._id, contactId);
+      if (res.success) {
+        toast.success("কন্টাক্ট সফলভাবে ডিলিট হয়েছে!");
+        fetchDashboardData();
+      } else {
+        toast.error(res.error || "ডিলিট করতে সমস্যা হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ভুল হয়েছে।");
     }
   };
   
@@ -886,14 +962,24 @@ export default function Home() {
                 <ChefHat className="w-5 h-5 text-orange-500 animate-pulse" />
                 <h3 className="font-extrabold text-gray-900 text-lg">আজকের রান্নার মেনু (Cooking Menu)</h3>
               </div>
-              {isManagerOrAdmin && !isEditingMenu && (
-                <button
-                  onClick={() => setIsEditingMenu(true)}
-                  className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl hover:bg-indigo-100 transition-colors"
-                >
-                  মেনু আপডেট করুন
-                </button>
-              )}
+              <div className="flex gap-2">
+                {isManagerOrAdmin && allMenuRatings.length > 0 && (
+                  <button
+                    onClick={() => setShowRatingsDetailModal(true)}
+                    className="text-[10px] font-extrabold text-amber-600 bg-amber-50 px-2.5 py-1.5 rounded-xl hover:bg-amber-100 transition-colors flex items-center gap-1"
+                  >
+                    ⭐ রিভিউ বিবরণী ({menuAverages.totalCount} জন)
+                  </button>
+                )}
+                {isManagerOrAdmin && !isEditingMenu && (
+                  <button
+                    onClick={() => setIsEditingMenu(true)}
+                    className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl hover:bg-indigo-100 transition-colors"
+                  >
+                    মেনু আপডেট করুন
+                  </button>
+                )}
+              </div>
             </div>
 
             {isEditingMenu ? (
@@ -954,8 +1040,15 @@ export default function Home() {
                   <div className="bg-orange-50/30 p-3.5 rounded-2xl border border-orange-50/50 flex flex-col justify-between min-h-[90px]">
                     <div className="flex items-start gap-3">
                       <span className="text-xl flex-shrink-0">🍳</span>
-                      <div>
-                        <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">সকালের মেনু</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center w-full">
+                          <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">সকালের মেনু</p>
+                          {menuAverages.breakfast > 0 && (
+                            <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5">
+                              ⭐ {menuAverages.breakfast}
+                            </span>
+                          )}
+                        </div>
                         <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.breakfast || 'আপডেট করা হয়নি'}</p>
                       </div>
                     </div>
@@ -982,8 +1075,15 @@ export default function Home() {
                   <div className="bg-blue-50/30 p-3.5 rounded-2xl border border-blue-50/50 flex flex-col justify-between min-h-[90px]">
                     <div className="flex items-start gap-3">
                       <span className="text-xl flex-shrink-0">🍛</span>
-                      <div>
-                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">দুপুরের মেনু</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center w-full">
+                          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">দুপুরের মেনু</p>
+                          {menuAverages.lunch > 0 && (
+                            <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5">
+                              ⭐ {menuAverages.lunch}
+                            </span>
+                          )}
+                        </div>
                         <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.lunch || 'আপডেট করা হয়নি'}</p>
                       </div>
                     </div>
@@ -1010,8 +1110,15 @@ export default function Home() {
                   <div className="bg-emerald-50/30 p-3.5 rounded-2xl border border-emerald-50/50 flex flex-col justify-between min-h-[90px]">
                     <div className="flex items-start gap-3">
                       <span className="text-xl flex-shrink-0">🍲</span>
-                      <div>
-                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">রাতের মেনু</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center w-full">
+                          <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">রাতের মেনু</p>
+                          {menuAverages.dinner > 0 && (
+                            <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5">
+                              ⭐ {menuAverages.dinner}
+                            </span>
+                          )}
+                        </div>
                         <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.dinner || 'আপডেট করা হয়নি'}</p>
                       </div>
                     </div>
@@ -1036,11 +1143,11 @@ export default function Home() {
                 </div>
 
                 {/* Food satisfaction summary bar */}
-                {(breakfastRating > 0 || lunchRating > 0 || dinnerRating > 0) && (
+                {(menuAverages.breakfast > 0 || menuAverages.lunch > 0 || menuAverages.dinner > 0) && (
                   <div className="p-3.5 bg-orange-50/50 border border-orange-100/50 rounded-2xl flex items-center justify-between gap-3 text-xs text-orange-850 font-bold animate-fadeIn">
                     <span className="flex items-center gap-1.5">🍽️ আজকের খাবারের রিভিউ বাজার কারিগরের নিকট পাঠানো হয়েছে।</span>
-                    <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase">
-                      সন্তুষ্টি সূচক: {Math.round(((breakfastRating + lunchRating + dinnerRating) / ( (breakfastRating?1:0) + (lunchRating?1:0) + (dinnerRating?1:0) || 1 )) * 20)}%
+                    <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase animate-pulse">
+                      গড় সন্তুষ্টি: {Math.round(((menuAverages.breakfast + menuAverages.lunch + menuAverages.dinner) / ( (menuAverages.breakfast?1:0) + (menuAverages.lunch?1:0) + (menuAverages.dinner?1:0) || 1 )) * 20)}%
                     </span>
                   </div>
                 )}
@@ -2037,74 +2144,70 @@ export default function Home() {
 
           {/* Emergency Contacts & Helpdesk */}
           <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50">
-            <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
-              <Phone className="w-5 h-5 text-indigo-500" />
-              মেস হেল্পডেস্ক ও জরুরি কন্টাক্টস
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-extrabold text-gray-955 text-base flex items-center gap-2">
+                <Phone className="w-5 h-5 text-indigo-500" />
+                মেস হেল্পডেস্ক ও জরুরি কন্টাক্টস
+              </h3>
+              {isManagerOrAdmin && (
+                <button
+                  onClick={() => {
+                    setSelectedContact(null);
+                    setContactDesignation('');
+                    setContactName('');
+                    setContactPhone('');
+                    setIsEditingContact(true);
+                  }}
+                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-extrabold flex items-center gap-1 transition-all shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" /> যোগ করুন
+                </button>
+              )}
+            </div>
             
             <div className="space-y-3.5 text-xs font-bold">
-              <div className="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
-                <div>
-                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">মেস ম্যানেজার</p>
-                  <p className="text-gray-900 font-extrabold text-sm mt-0.5">Md Refayet Hossen</p>
-                </div>
-                <div className="flex gap-2">
-                  <a href="tel:+8801700000000" className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors">
-                    <Phone className="w-4 h-4" />
-                  </a>
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText("+8801700000000");
-                      toast.success("নম্বর কপি হয়েছে!");
-                    }} 
-                    className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
-                <div>
-                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">সহকারী ম্যানেজার</p>
-                  <p className="text-gray-900 font-extrabold text-sm mt-0.5">MD Rifat</p>
-                </div>
-                <div className="flex gap-2">
-                  <a href="tel:+8801900000000" className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors">
-                    <Phone className="w-4 h-4" />
-                  </a>
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText("+8801900000000");
-                      toast.success("নম্বর কপি হয়েছে!");
-                    }} 
-                    className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all">
-                <div>
-                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">মেস বাবুর্চি (Cook)</p>
-                  <p className="text-gray-900 font-extrabold text-sm mt-0.5">Babul Bhai</p>
-                </div>
-                <div className="flex gap-2">
-                  <a href="tel:+8801800000000" className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors">
-                    <Phone className="w-4 h-4" />
-                  </a>
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText("+8801800000000");
-                      toast.success("নম্বর কপি হয়েছে!");
-                    }} 
-                    className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+              {contacts.length === 0 ? (
+                <p className="text-gray-400 text-center py-4">কোনো জরুরি কন্টাক্ট পাওয়া যায়নি</p>
+              ) : (
+                contacts.map((contact: any) => (
+                  <div key={contact._id} className="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all group">
+                    <div>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">{contact.designation}</p>
+                      <p className="text-gray-900 font-extrabold text-sm mt-0.5 capitalize">{contact.name}</p>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <a href={`tel:${contact.phone}`} className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors">
+                        <Phone className="w-4 h-4" />
+                      </a>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(contact.phone);
+                          toast.success("নম্বর কপি হয়েছে!");
+                        }} 
+                        className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      {isManagerOrAdmin && (
+                        <>
+                          <button
+                            onClick={() => handleEditContactClick(contact)}
+                            className="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-colors"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteContactClick(contact._id)}
+                            className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
 
               <div className="p-3.5 bg-amber-50 text-amber-900 border border-amber-100/50 rounded-2xl text-[11px] font-semibold leading-relaxed flex items-start gap-2.5">
                 <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -2303,6 +2406,146 @@ export default function Home() {
                   ঠিক আছে, বন্ধ করুন
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Contact Modal */}
+      {isEditingContact && (
+        <div suppressHydrationWarning className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-md transition-all duration-300 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.1)] relative overflow-hidden animate-slideUp">
+            <button 
+              onClick={() => setIsEditingContact(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-base font-extrabold text-gray-955 mb-4 flex items-center gap-2">
+              <Phone className="w-5 h-5 text-indigo-500" />
+              {selectedContact ? 'কন্টাক্ট এডিট করুন' : 'নতুন কন্টাক্ট যোগ করুন'}
+            </h3>
+
+            <form onSubmit={handleContactSubmit} className="space-y-4 text-xs font-bold">
+              <div className="space-y-1">
+                <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">পদবী / Designation</label>
+                <input 
+                  type="text"
+                  required
+                  value={contactDesignation}
+                  onChange={(e) => setContactDesignation(e.target.value)}
+                  placeholder="যেমন: মেস বাবুর্চি"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-200"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">নাম / Name</label>
+                <input 
+                  type="text"
+                  required
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  placeholder="যেমন: বাবুল ভাই"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-200"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">ফোন নম্বর / Phone Number</label>
+                <input 
+                  type="text"
+                  required
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="যেমন: +8801800000000"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-200"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingContact(false)}
+                  className="w-1/2 py-3 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold transition-all text-xs"
+                >
+                  বাতিল করুন
+                </button>
+                <button
+                  type="submit"
+                  disabled={contactSubmitLoading}
+                  className="w-1/2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all text-xs disabled:opacity-50 shadow-md shadow-indigo-100"
+                >
+                  {contactSubmitLoading ? 'সংরক্ষণ হচ্ছে...' : 'সংরক্ষণ করুন'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Menu Ratings Detail Modal for Admins */}
+      {showRatingsDetailModal && (
+        <div suppressHydrationWarning className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-md transition-all duration-300 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.1)] relative overflow-hidden animate-slideUp">
+            <button 
+              onClick={() => setShowRatingsDetailModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-base font-extrabold text-gray-955 mb-4 flex items-center gap-2">
+              <ChefHat className="w-5 h-5 text-orange-500" />
+              আজকের খাবারের রিভিউ ডিটেইলস
+            </h3>
+
+            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
+              <div className="grid grid-cols-3 gap-2 bg-gray-50 p-3 rounded-2xl text-center text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">
+                <div>🍳 সকাল (গড়: {menuAverages.breakfast || 0}★)</div>
+                <div>🍛 দুপুর (গড়: {menuAverages.lunch || 0}★)</div>
+                <div>🍲 রাত (গড়: {menuAverages.dinner || 0}★)</div>
+              </div>
+
+              <div className="space-y-2">
+                {allMenuRatings.length === 0 ? (
+                  <p className="text-gray-400 text-center py-4">কোনো রিভিউ ডেটা পাওয়া যায়নি</p>
+                ) : (
+                  allMenuRatings.map((rating: any) => (
+                    <div key={rating._id} className="p-3 border border-gray-100 rounded-2xl flex items-center justify-between text-xs font-bold bg-gray-50/20">
+                      <div>
+                        <p className="text-gray-900 font-extrabold capitalize">{rating.userId?.name || 'অজানা মেম্বার'}</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">{rating.userId?.role === 'Super Admin' ? 'সুপার অ্যাডমিন' : rating.userId?.role === 'Manager' ? 'ম্যানেজার' : 'মেম্বার'}</p>
+                      </div>
+                      
+                      <div className="flex gap-3 text-right">
+                        <div>
+                          <p className="text-[8px] text-gray-400 uppercase">🍳</p>
+                          <p className="text-amber-500 font-black">{rating.breakfast > 0 ? `${rating.breakfast}★` : '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] text-gray-400 uppercase">🍛</p>
+                          <p className="text-amber-500 font-black">{rating.lunch > 0 ? `${rating.lunch}★` : '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] text-gray-400 uppercase">🍲</p>
+                          <p className="text-amber-500 font-black">{rating.dinner > 0 ? `${rating.dinner}★` : '-'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-gray-150 mt-4">
+              <button
+                onClick={() => setShowRatingsDetailModal(false)}
+                className="w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold transition-all text-xs"
+              >
+                বন্ধ করুন
+              </button>
             </div>
           </div>
         </div>
