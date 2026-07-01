@@ -1769,28 +1769,7 @@ export default function Home() {
             )}
           </div>
 
-          {/* Live Mess Update Feed */}
-          {notifications && notifications.length > 0 && (
-            <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50">
-              <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
-                <Activity className="w-5 h-5 text-indigo-500" />
-                মেস ফিড (Live Updates)
-              </h3>
-              
-              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                {notifications.slice(0, 5).map((notif) => (
-                  <div key={notif._id} className="relative pl-6 border-l border-gray-100 pb-1.5 last:pb-0">
-                    <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 bg-indigo-500 rounded-full border border-white shadow-sm animate-pulse" />
-                    <div className="text-xs font-bold text-gray-800">
-                      <p className="text-[9px] text-gray-400 font-semibold">{formatSafeDate(notif.createdAt)}</p>
-                      <p className="font-extrabold text-gray-900 mt-0.5 capitalize">{notif.title}</p>
-                      <p className="text-[10px] text-gray-500 font-medium mt-1 leading-relaxed">{notif.message}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+
         </div>
 
         {/* Column 2: Bazaar Date, Budget Status, Notice Board & Achievements (4 cols) */}
@@ -2033,8 +2012,28 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          </div>
-
+          </div>          {/* Live Mess Update Feed */}
+          {notifications && notifications.length > 0 && (
+            <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50">
+              <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-indigo-500" />
+                মেস ফিড (Live Updates)
+              </h3>
+              
+              <div className="space-y-4 max-h-[250px] overflow-y-auto pr-1">
+                {notifications.slice(0, 5).map((notif) => (
+                  <div key={notif._id} className="relative pl-6 border-l border-gray-100 pb-1.5 last:pb-0">
+                    <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 bg-indigo-500 rounded-full border border-white shadow-sm animate-pulse" />
+                    <div className="text-xs font-bold text-gray-800">
+                      <p className="text-[9px] text-gray-400 font-semibold">{formatSafeDate(notif.createdAt)}</p>
+                      <p className="font-extrabold text-gray-900 mt-0.5 capitalize">{notif.title}</p>
+                      <p className="text-[10px] text-gray-500 font-medium mt-1 leading-relaxed">{notif.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Emergency Contacts & Helpdesk */}
           <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50">
