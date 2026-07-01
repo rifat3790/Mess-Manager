@@ -17,7 +17,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // If not loading, no user, and trying to access protected route -> redirect to login
-    if (!loading && !user && pathname !== '/login' && pathname !== '/signup') {
+    if (!loading && !user && pathname !== '/login' && pathname !== '/register') {
       router.push('/login');
     }
   }, [user, loading, pathname, router]);
@@ -33,7 +33,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   // Allow rendering for public routes regardless of auth state
-  if (pathname === '/login' || pathname === '/signup') {
+  if (pathname === '/login' || pathname === '/register') {
     return <>{children}</>;
   }
 

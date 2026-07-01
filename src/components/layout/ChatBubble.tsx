@@ -29,7 +29,7 @@ export default function ChatBubble() {
   }, [mongoUser]);
 
   // Don't show the bubble if user is already on the chat page or not logged in
-  if (!mongoUser || pathname === '/chat' || pathname === '/login' || pathname === '/signup') {
+  if (!mongoUser || pathname === '/chat' || pathname === '/login' || pathname === '/register') {
     return null;
   }
 

@@ -4,6 +4,7 @@ import connectToDatabase from "@/lib/mongoose";
 import BazaarSchedule from "@/models/BazaarSchedule";
 import Month from "@/models/Month";
 import User from "@/models/User";
+import BazaarChecklist from "@/models/BazaarChecklist";
 import { createNotification } from "./notificationActions";
 
 export async function getBazaarSchedules() {
@@ -85,6 +86,58 @@ export async function deleteBazaarSchedule(id: string) {
   try {
     await connectToDatabase();
     await BazaarSchedule.findByIdAndDelete(id);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getBazaarChecklist() {
+  try {
+    await connectToDatabase();
+    const items = await BazaarChecklist.find().sort({ createdAt: 1 });
+    return { success: true, items: JSON.parse(JSON.stringify(items)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function addBazaarChecklistItem(adminUserId: string, item: string) {
+  try {
+    await connectToDatabase();
+
+    const admin = await User.findById(adminUserId);
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const newItem = await BazaarChecklist.create({ item, isCompleted: false });
+    return { success: true, item: JSON.parse(JSON.stringify(newItem)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function toggleBazaarChecklistItem(id: string, isCompleted: boolean) {
+  try {
+    await connectToDatabase();
+    const updated = await BazaarChecklist.findByIdAndUpdate(id, { isCompleted }, { new: true });
+    return { success: true, item: JSON.parse(JSON.stringify(updated)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteBazaarChecklistItem(adminUserId: string, id: string) {
+  try {
+    await connectToDatabase();
+
+    const admin = await User.findById(adminUserId);
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    await BazaarChecklist.findByIdAndDelete(id);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
