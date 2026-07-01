@@ -645,7 +645,7 @@ export default function Home() {
             <div className="min-w-0">
               <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider">মেস নোটিশ (New announcement)</span>
               <p className="font-extrabold text-sm text-gray-800 mt-1 truncate">
-                {recentNotice.createdBy?.name?.split(' ')[0]} ({recentNotice.createdBy?.role}) একটি গুরুত্বপূর্ণ নোটিশ পোস্ট করেছেন: "{recentNotice.title}"
+                {recentNotice.createdBy?.name ? recentNotice.createdBy.name.split(' ')[0] : 'অ্যাডমিন'} ({recentNotice.createdBy?.role || 'ম্যানেজার'}) একটি গুরুত্বপূর্ণ নোটিশ পোস্ট করেছেন: "{recentNotice.title}"
               </p>
               <p className="text-[10px] font-bold text-gray-400 mt-0.5">
                 পোস্টের সময়: {formatSafeDate(recentNotice.createdAt)} • বিস্তারিত পড়তে এখানে ক্লিক করুন
@@ -1499,9 +1499,9 @@ export default function Home() {
                  আমার বাজার শিডিউল
                </h3>
                {(() => {
-                 const mySchedule = bazaarSchedules.find(s => s.userId._id === mongoUser._id && s.status === 'Approved');
-                 const myPending = bazaarSchedules.find(s => s.userId._id === mongoUser._id && s.status === 'Pending');
-                 const myCompleted = bazaarSchedules.find(s => s.userId._id === mongoUser._id && s.status === 'Completed');
+                 const mySchedule = bazaarSchedules.find(s => s.userId?._id === mongoUser._id && s.status === 'Approved');
+                 const myPending = bazaarSchedules.find(s => s.userId?._id === mongoUser._id && s.status === 'Pending');
+                 const myCompleted = bazaarSchedules.find(s => s.userId?._id === mongoUser._id && s.status === 'Completed');
                  
                  if (myCompleted) {
                    return (
