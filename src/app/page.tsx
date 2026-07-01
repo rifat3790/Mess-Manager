@@ -1552,6 +1552,245 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          {/* Future Balance Projector Widget */}
+          {myStats && globalStats && (
+            <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50 flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                <Calculator className="w-24 h-24 text-indigo-600" />
+              </div>
+              
+              <div className="relative z-10 space-y-4">
+                <h3 className="font-extrabold text-gray-955 text-base flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-indigo-500" />
+                  ব্যালেন্স প্রজেকশন ক্যালকুলেটর
+                </h3>
+                <p className="text-[10px] text-gray-400 font-bold leading-relaxed">
+                  বাকি দিনগুলোর আনুমানিক মিল দিয়ে চেক করুন মাসের শেষে আপনার সম্ভাব্য ব্যালেন্স এবং বাজেট ঘাটতি।
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">বাকি মিল সংখ্যা</label>
+                    <input 
+                      type="number"
+                      value={estMeals}
+                      onChange={(e) => setEstMeals(e.target.value)}
+                      placeholder="যেমন: ১৫"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-200"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">অতিরিক্ত একক খরচ</label>
+                    <input 
+                      type="number"
+                      value={estSingleExp}
+                      onChange={(e) => setEstSingleExp(e.target.value)}
+                      placeholder="যেমন: ২০০ ৳"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-200"
+                    />
+                  </div>
+                </div>
+
+                {/* Projection Results */}
+                {(() => {
+                  const currentMeals = myStats.totalMeal || 0;
+                  const currentDeposit = myStats.deposit || 0;
+                  const currentSingle = myStats.singleCost || 0;
+                  const currentJoint = myStats.jointCost || 0;
+                  const mealRate = globalStats.mealRate || 0;
+
+                  const remainingMealsVal = parseFloat(estMeals) || 0;
+                  const extraSingleVal = parseFloat(estSingleExp) || 0;
+
+                  const projectedMeals = currentMeals + remainingMealsVal;
+                  const projectedMealCost = projectedMeals * mealRate;
+                  const projectedSingleCost = currentSingle + extraSingleVal;
+                  
+                  const projectedTotalCost = projectedMealCost + currentJoint + projectedSingleCost;
+                  const projectedBalance = currentDeposit - projectedTotalCost;
+                  const shortfall = projectedBalance < 0 ? Math.abs(projectedBalance) : 0;
+
+                  return (
+                    <div className="space-y-3 pt-2 mt-2 border-t border-gray-100 text-xs font-bold">
+                      <div className="flex justify-between text-gray-500 text-[10px]">
+                        <span>প্রজেক্টেড মিল খরচ:</span>
+                        <span className="text-gray-900 font-extrabold">{projectedMealCost.toFixed(1)} ৳</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500 text-[10px]">
+                        <span>প্রজেক্টেড মোট খরচ:</span>
+                        <span className="text-gray-900 font-extrabold">{projectedTotalCost.toFixed(0)} ৳</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3.5 bg-gray-50/50 rounded-2xl border border-gray-100 mt-2">
+                        <div>
+                          <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">সম্ভাব্য শেষ ব্যালেন্স</p>
+                          <p className={`text-base font-black mt-1 ${projectedBalance >= 0 ? 'text-emerald-600' : 'text-rose-600 animate-pulse'}`}>
+                            {projectedBalance >= 0 ? '+' : ''}{projectedBalance.toFixed(0)} ৳
+                          </p>
+                        </div>
+                        {shortfall > 0 && (
+                          <div className="text-right">
+                            <span className="inline-block px-2 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-md text-[9px] font-black uppercase tracking-wider animate-pulse">ঘাটতি</span>
+                            <p className="text-xs font-black text-rose-700 mt-0.5">জমা করতে হবে: {shortfall.toFixed(0)} ৳</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {shortfall > 0 && (
+                        <button 
+                          onClick={() => router.push('/deposit')}
+                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-center block transition-all mt-2 text-[10px] tracking-wide shadow-md"
+                        >
+                          দ্রুত টাকা জমা দিন
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Subgrid: Smart Budget Advisor */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Smart Budget Advisor Card */}
+            {myStats && myStats.totalCost !== undefined && (
+              <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
+                <div suppressHydrationWarning className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                  <Sparkles className="w-24 h-24 text-indigo-600" />
+                </div>
+
+                <div suppressHydrationWarning className="relative z-10 flex-1 flex flex-col space-y-4">
+                  <h3 className="font-extrabold text-gray-955 text-base flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-500" />
+                    স্মার্ট বাজেট অ্যাডভাইজর
+                  </h3>
+                  
+                  {(() => {
+                    const elapsedDays = Math.max(1, new Date().getDate());
+                    const dailyAvg = myStats.totalCost / elapsedDays;
+                    const projectedCost = dailyAvg * 30;
+                    const daysLeft = dailyAvg > 0 && myStats.balance > 0 ? Math.floor(myStats.balance / dailyAvg) : 0;
+                    
+                    let adviceTitle = "বাজেট ব্যালেন্স নিরাপদ ✅";
+                    let adviceDesc = `বর্তমান খরচ অনুযায়ী এই মাস আপনার ব্যালেন্স পর্যাপ্ত আছে। আপনার জমাকৃত টাকায় আরও আনুমানিক ${daysLeft} দিন চলবে।`;
+                    let adviceBg = "bg-emerald-50 border-emerald-100 text-emerald-800";
+                    let badgeIcon = "👍";
+
+                    if (myStats.balance <= 0) {
+                      adviceTitle = "ব্যালেন্স শেষ / ঋণাত্মক ⚠️";
+                      adviceDesc = "আপনার ব্যালেন্স শেষ হয়ে গেছে। মেসের মিল ও হিসাব সচল রাখতে দ্রুত টাকা জমা দিন।";
+                      adviceBg = "bg-rose-50 border-rose-100 text-rose-800";
+                      badgeIcon = "🚨";
+                    } else if (daysLeft <= 5) {
+                      adviceTitle = "দ্রুত ব্যালেন্স শেষ হচ্ছে ⏳";
+                      adviceDesc = `সতর্কতা! আপনার বর্তমান খরচ অনুযায়ী আগামী ${daysLeft} দিনের মধ্যে ব্যালেন্স শেষ হতে পারে।`;
+                      adviceBg = "bg-amber-50 border-amber-100 text-amber-800";
+                      badgeIcon = "⚠️";
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-gray-50/80 p-3 rounded-2xl border border-gray-100">
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">দৈনিক গড় খরচ</p>
+                            <p className="text-base font-black text-gray-900 mt-1">{dailyAvg.toFixed(1)} ৳</p>
+                          </div>
+                          <div className="bg-gray-50/80 p-3 rounded-2xl border border-gray-100">
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">মাসিক আনুমানিক খরচ</p>
+                            <p className="text-base font-black text-gray-900 mt-1">{projectedCost.toFixed(0)} ৳</p>
+                          </div>
+                        </div>
+
+                        <div className={cn("p-4 rounded-2xl border text-xs font-bold leading-relaxed flex items-start gap-2.5", adviceBg)}>
+                          <span className="text-lg flex-shrink-0">{badgeIcon}</span>
+                          <div>
+                            <p className="font-extrabold text-[13px] mb-0.5">{adviceTitle}</p>
+                            <p className="text-[11px] opacity-90">{adviceDesc}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Cost Distribution Chart Card */}
+            {myStats && myStats.totalCost > 0 && (
+              <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
+                <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-indigo-500" />
+                  আমার খরচ বিভাজন
+                </h3>
+
+                {(() => {
+                  const total = myStats.mealCost + myStats.jointCost + myStats.singleCost || 1;
+                  const mealPct = Math.round((myStats.mealCost / total) * 100);
+                  const jointPct = Math.round((myStats.jointCost / total) * 100);
+                  const singlePct = Math.round((myStats.singleCost / total) * 100);
+
+                  return (
+                    <div className="space-y-4 text-xs font-bold text-gray-700">
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="flex items-center gap-1.5"><Utensils className="w-3.5 h-3.5 text-orange-500" /> মিল বাবদ খরচ ({mealPct}%)</span>
+                          <span className="text-gray-900 font-extrabold">{myStats.mealCost.toFixed(0)} ৳</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                          <div className="h-full bg-orange-500 transition-all duration-500" style={{ width: `${mealPct}%` }}></div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-indigo-500" /> যৌথ মেস খরচ ({jointPct}%)</span>
+                          <span className="text-gray-900 font-extrabold">{myStats.jointCost.toFixed(0)} ৳</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${jointPct}%` }}></div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-teal-500" /> ব্যক্তিগত খরচ ({singlePct}%)</span>
+                          <span className="text-gray-900 font-extrabold">{myStats.singleCost.toFixed(0)} ৳</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                          <div className="h-full bg-teal-500 transition-all duration-500" style={{ width: `${singlePct}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+
+          {/* Live Mess Update Feed */}
+          {notifications && notifications.length > 0 && (
+            <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50">
+              <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-indigo-500" />
+                মেস ফিড (Live Updates)
+              </h3>
+              
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+                {notifications.slice(0, 5).map((notif) => (
+                  <div key={notif._id} className="relative pl-6 border-l border-gray-100 pb-1.5 last:pb-0">
+                    <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 bg-indigo-500 rounded-full border border-white shadow-sm animate-pulse" />
+                    <div className="text-xs font-bold text-gray-800">
+                      <p className="text-[9px] text-gray-400 font-semibold">{formatSafeDate(notif.createdAt)}</p>
+                      <p className="font-extrabold text-gray-900 mt-0.5 capitalize">{notif.title}</p>
+                      <p className="text-[10px] text-gray-500 font-medium mt-1 leading-relaxed">{notif.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Column 2: Bazaar Date, Budget Status, Notice Board & Achievements (4 cols) */}
@@ -1728,119 +1967,9 @@ export default function Home() {
              </div>
           </div>
 
-          {/* Smart Budget Advisor Card (Unique Premium Feature) */}
-          {myStats && myStats.totalCost !== undefined && (
-             <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
-                <div suppressHydrationWarning className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                   <Sparkles className="w-24 h-24 text-indigo-600" />
-                </div>
 
-                <div suppressHydrationWarning className="relative z-10 flex-1 flex flex-col space-y-4">
-                  <h3 className="font-extrabold text-gray-955 text-base flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-indigo-500" />
-                    স্মার্ট বাজেট অ্যাডভাইজর
-                  </h3>
-                  
-                  {(() => {
-                    const elapsedDays = Math.max(1, new Date().getDate());
-                    const dailyAvg = myStats.totalCost / elapsedDays;
-                    const projectedCost = dailyAvg * 30;
-                    const daysLeft = dailyAvg > 0 && myStats.balance > 0 ? Math.floor(myStats.balance / dailyAvg) : 0;
-                    
-                    let adviceTitle = "বাজেট ব্যালেন্স নিরাপদ ✅";
-                    let adviceDesc = `বর্তমান খরচ অনুযায়ী এই মাস আপনার ব্যালেন্স পর্যাপ্ত আছে। আপনার জমাকৃত টাকায় আরও আনুমানিক ${daysLeft} দিন চলবে।`;
-                    let adviceBg = "bg-emerald-50 border-emerald-100 text-emerald-800";
-                    let badgeIcon = "👍";
 
-                    if (myStats.balance <= 0) {
-                      adviceTitle = "ব্যালেন্স শেষ / ঋণাত্মক ⚠️";
-                      adviceDesc = "আপনার ব্যালেন্স শেষ হয়ে গেছে। মেসের মিল ও হিসাব সচল রাখতে দ্রুত টাকা জমা দিন।";
-                      adviceBg = "bg-rose-50 border-rose-100 text-rose-800";
-                      badgeIcon = "🚨";
-                    } else if (daysLeft <= 5) {
-                      adviceTitle = "দ্রুত ব্যালেন্স শেষ হচ্ছে ⏳";
-                      adviceDesc = `সতর্কতা! আপনার বর্তমান খরচ অনুযায়ী আগামী ${daysLeft} দিনের মধ্যে ব্যালেন্স শেষ হতে পারে।`;
-                      adviceBg = "bg-amber-50 border-amber-100 text-amber-800";
-                      badgeIcon = "⚠️";
-                    }
 
-                    return (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-gray-50/80 p-3 rounded-2xl border border-gray-100">
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">দৈনিক গড় খরচ</p>
-                            <p className="text-base font-black text-gray-900 mt-1">{dailyAvg.toFixed(1)} ৳</p>
-                          </div>
-                          <div className="bg-gray-50/80 p-3 rounded-2xl border border-gray-100">
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">মাসিক আনুমানিক খরচ</p>
-                            <p className="text-base font-black text-gray-900 mt-1">{projectedCost.toFixed(0)} ৳</p>
-                          </div>
-                        </div>
-
-                        <div className={cn("p-4 rounded-2xl border text-xs font-bold leading-relaxed flex items-start gap-2.5", adviceBg)}>
-                          <span className="text-lg flex-shrink-0">{badgeIcon}</span>
-                          <div>
-                            <p className="font-extrabold text-[13px] mb-0.5">{adviceTitle}</p>
-                            <p className="text-[11px] opacity-90">{adviceDesc}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-             </div>
-           )}
-
-           {/* Cost Distribution Chart Card (Unique Premium Feature) */}
-           {myStats && myStats.totalCost > 0 && (
-             <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
-               <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
-                 <Receipt className="w-5 h-5 text-indigo-500" />
-                 আমার খরচ বিভাজন
-               </h3>
-
-               {(() => {
-                 const total = myStats.mealCost + myStats.jointCost + myStats.singleCost || 1;
-                 const mealPct = Math.round((myStats.mealCost / total) * 100);
-                 const jointPct = Math.round((myStats.jointCost / total) * 100);
-                 const singlePct = Math.round((myStats.singleCost / total) * 100);
-
-                 return (
-                   <div className="space-y-4 text-xs font-bold text-gray-700">
-                     <div className="space-y-1.5">
-                       <div className="flex justify-between items-center text-[10px]">
-                         <span className="flex items-center gap-1.5"><Utensils className="w-3.5 h-3.5 text-orange-500" /> মিল বাবদ খরচ ({mealPct}%)</span>
-                         <span className="text-gray-900 font-extrabold">{myStats.mealCost.toFixed(0)} ৳</span>
-                       </div>
-                       <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                         <div className="h-full bg-orange-500 transition-all duration-500" style={{ width: `${mealPct}%` }}></div>
-                       </div>
-                     </div>
-
-                     <div className="space-y-1.5">
-                       <div className="flex justify-between items-center text-[10px]">
-                         <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-indigo-500" /> যৌথ মেস খরচ ({jointPct}%)</span>
-                         <span className="text-gray-900 font-extrabold">{myStats.jointCost.toFixed(0)} ৳</span>
-                       </div>
-                       <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                         <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${jointPct}%` }}></div>
-                       </div>
-                     </div>
-
-                     <div className="space-y-1.5">
-                       <div className="flex justify-between items-center text-[10px]">
-                         <span className="flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-teal-500" /> ব্যক্তিগত খরচ ({singlePct}%)</span>
-                         <span className="text-gray-900 font-extrabold">{myStats.singleCost.toFixed(0)} ৳</span>
-                       </div>
-                       <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                         <div className="h-full bg-teal-500 transition-all duration-500" style={{ width: `${singlePct}%` }}></div>
-                       </div>
-                     </div>
-                   </div>
-                 );
-               })()}
-             </div>
-           )}
 
            {/* Leaderboard Achievements Widget */}
           <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col relative overflow-hidden">
@@ -1906,127 +2035,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Future Balance Projector Widget */}
-          {myStats && globalStats && (
-            <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50 flex flex-col relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                <Calculator className="w-24 h-24 text-indigo-600" />
-              </div>
-              
-              <div className="relative z-10 space-y-4">
-                <h3 className="font-extrabold text-gray-955 text-base flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-indigo-500" />
-                  ব্যালেন্স প্রজেকশন ক্যালকুলেটর
-                </h3>
-                <p className="text-[10px] text-gray-400 font-bold leading-relaxed">
-                  বাকি দিনগুলোর আনুমানিক মিল দিয়ে চেক করুন মাসের শেষে আপনার সম্ভাব্য ব্যালেন্স এবং বাজেট ঘাটতি।
-                </p>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">বাকি মিল সংখ্যা</label>
-                    <input 
-                      type="number"
-                      value={estMeals}
-                      onChange={(e) => setEstMeals(e.target.value)}
-                      placeholder="যেমন: ১৫"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-200"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">অতিরিক্ত একক খরচ</label>
-                    <input 
-                      type="number"
-                      value={estSingleExp}
-                      onChange={(e) => setEstSingleExp(e.target.value)}
-                      placeholder="যেমন: ২০০ ৳"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-200"
-                    />
-                  </div>
-                </div>
-
-                {/* Projection Results */}
-                {(() => {
-                  const currentMeals = myStats.totalMeal || 0;
-                  const currentDeposit = myStats.deposit || 0;
-                  const currentSingle = myStats.singleCost || 0;
-                  const currentJoint = myStats.jointCost || 0;
-                  const mealRate = globalStats.mealRate || 0;
-
-                  const remainingMealsVal = parseFloat(estMeals) || 0;
-                  const extraSingleVal = parseFloat(estSingleExp) || 0;
-
-                  const projectedMeals = currentMeals + remainingMealsVal;
-                  const projectedMealCost = projectedMeals * mealRate;
-                  const projectedSingleCost = currentSingle + extraSingleVal;
-                  
-                  const projectedTotalCost = projectedMealCost + currentJoint + projectedSingleCost;
-                  const projectedBalance = currentDeposit - projectedTotalCost;
-                  const shortfall = projectedBalance < 0 ? Math.abs(projectedBalance) : 0;
-
-                  return (
-                    <div className="space-y-3 pt-2 mt-2 border-t border-gray-100 text-xs font-bold">
-                      <div className="flex justify-between text-gray-500 text-[10px]">
-                        <span>প্রজেক্টেড মিল খরচ:</span>
-                        <span className="text-gray-900 font-extrabold">{projectedMealCost.toFixed(1)} ৳</span>
-                      </div>
-                      <div className="flex justify-between text-gray-500 text-[10px]">
-                        <span>প্রজেক্টেড মোট খরচ:</span>
-                        <span className="text-gray-900 font-extrabold">{projectedTotalCost.toFixed(0)} ৳</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-3.5 bg-gray-50/50 rounded-2xl border border-gray-100 mt-2">
-                        <div>
-                          <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">সম্ভাব্য শেষ ব্যালেন্স</p>
-                          <p className={`text-base font-black mt-1 ${projectedBalance >= 0 ? 'text-emerald-600' : 'text-rose-600 animate-pulse'}`}>
-                            {projectedBalance >= 0 ? '+' : ''}{projectedBalance.toFixed(0)} ৳
-                          </p>
-                        </div>
-                        {shortfall > 0 && (
-                          <div className="text-right">
-                            <span className="inline-block px-2 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-md text-[9px] font-black uppercase tracking-wider animate-pulse">ঘাটতি</span>
-                            <p className="text-xs font-black text-rose-700 mt-0.5">জমা করতে হবে: {shortfall.toFixed(0)} ৳</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {shortfall > 0 && (
-                        <button 
-                          onClick={() => router.push('/deposit')}
-                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-center block transition-all mt-2 text-[10px] tracking-wide shadow-md"
-                        >
-                          দ্রুত টাকা জমা দিন
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-
-          {/* Live Mess Update Feed */}
-          {notifications && notifications.length > 0 && (
-            <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50">
-              <h3 className="font-extrabold text-gray-955 text-base mb-4 flex items-center gap-2">
-                <Activity className="w-5 h-5 text-indigo-500" />
-                মেস ফিড (Live Updates)
-              </h3>
-              
-              <div className="space-y-4 max-h-[250px] overflow-y-auto pr-1">
-                {notifications.slice(0, 5).map((notif) => (
-                  <div key={notif._id} className="relative pl-6 border-l border-gray-100 pb-1.5 last:pb-0">
-                    <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 bg-indigo-500 rounded-full border border-white shadow-sm animate-pulse" />
-                    <div className="text-xs font-bold text-gray-800">
-                      <p className="text-[9px] text-gray-400 font-semibold">{formatSafeDate(notif.createdAt)}</p>
-                      <p className="font-extrabold text-gray-900 mt-0.5 capitalize">{notif.title}</p>
-                      <p className="text-[10px] text-gray-500 font-medium mt-1 leading-relaxed">{notif.message}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Emergency Contacts & Helpdesk */}
           <div suppressHydrationWarning className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-gray-100/50">
