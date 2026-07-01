@@ -3,18 +3,32 @@
 import connectToDatabase from "@/lib/mongoose";
 import Notification from "@/models/Notification";
 
+import Month from "@/models/Month";
+
 export async function getNotifications(userId: string) {
   try {
     await connectToDatabase();
     
+    const activeMonth = await Month.findOne({ isActive: true });
+    
     // Get notifications specifically for this user OR global ones (userId = null)
-    const notifications = await Notification.find({
+    const query: any = {
       $or: [
         { userId: userId },
         { userId: { $exists: false } },
         { userId: null }
       ]
-    }).sort({ createdAt: -1 }).limit(20);
+    };
+
+    if (activeMonth && activeMonth.startDate) {
+      query.createdAt = { $gte: new Date(activeMonth.startDate) };
+      // Async background deletion of previous months' notifications to clean database
+      Notification.deleteMany({ createdAt: { $lt: new Date(activeMonth.startDate) } }).catch(err => {
+        console.error("Pruning old notifications failed:", err);
+      });
+    }
+    
+    const notifications = await Notification.find(query).sort({ createdAt: -1 }).limit(20);
     
     return { success: true, notifications: JSON.parse(JSON.stringify(notifications)) };
   } catch (error: any) {

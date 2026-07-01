@@ -4,6 +4,7 @@ import connectToDatabase from "@/lib/mongoose";
 import BazaarSchedule from "@/models/BazaarSchedule";
 import Month from "@/models/Month";
 import User from "@/models/User";
+import { createNotification } from "./notificationActions";
 
 export async function getBazaarSchedules() {
   try {
@@ -32,6 +33,10 @@ export async function requestBazaarSchedule(userId: string, fromDate: Date, toDa
       status: 'Pending'
     });
     await schedule.save();
+
+    const user = await User.findById(userId);
+    await createNotification("বাজারের ডেট রিকোয়েস্ট", `${user?.name || 'মেম্বার'} একটি নতুন বাজার শিডিউল ডেট রিকোয়েস্ট করেছেন।`);
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -52,6 +57,10 @@ export async function assignBazaarSchedule(userId: string, fromDate: Date, toDat
       status: 'Approved' // Manager assigns it directly, so it's approved
     });
     await schedule.save();
+
+    const user = await User.findById(userId);
+    await createNotification("বাজারের শিডিউল দায়িত্ব", `${user?.name || 'মেম্বার'}-কে একটি নতুন বাজার শিডিউল দায়িত্ব দেওয়া হয়েছে।`);
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -61,7 +70,11 @@ export async function assignBazaarSchedule(userId: string, fromDate: Date, toDat
 export async function updateBazaarScheduleStatus(id: string, status: 'Approved' | 'Pending' | 'Completed') {
   try {
     await connectToDatabase();
-    await BazaarSchedule.findByIdAndUpdate(id, { status });
+    const schedule = await BazaarSchedule.findByIdAndUpdate(id, { status }).populate('userId', 'name');
+    
+    let statusBengali = status === 'Approved' ? 'অনুমোদিত' : status === 'Completed' ? 'সম্পন্ন' : 'পেন্ডিং';
+    await createNotification("বাজারের দায়িত্ব আপডেট", `${schedule?.userId?.name || 'মেম্বার'} এর বাজার দায়িত্ব স্ট্যাটাস '${statusBengali}' করা হয়েছে।`);
+    
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

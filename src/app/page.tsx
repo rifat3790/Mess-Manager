@@ -110,6 +110,7 @@ export default function Home() {
   // Live Notifications Feed
   const [notifications, setNotifications] = useState<any[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [popupNotification, setPopupNotification] = useState<any | null>(null);
 
   const formatSafeDate = (dateVal: any, formatOpts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' }) => {
     if (!dateVal) return 'অজানা তারিখ';
@@ -262,6 +263,56 @@ export default function Home() {
     fetchPendingRequests();
     fetchMenuAndNotices();
   }, [user, mongoUser]);
+
+  // Polling for live notifications (AJAX style real-time updates)
+  useEffect(() => {
+    if (!mongoUser || mongoUser.role === 'Pending') return;
+
+    // Helper to fetch notifications and check for new ones
+    const pollNotifications = async (isInitial = false) => {
+      try {
+        const res = await getNotifications(mongoUser._id);
+        if (res.success && res.notifications) {
+          const fetchedList = res.notifications;
+          setNotifications(fetchedList);
+
+          // Get seen IDs from localStorage
+          const seenIdsStr = localStorage.getItem('seenNotifications');
+          const seenIds: string[] = seenIdsStr ? JSON.parse(seenIdsStr) : [];
+
+          if (isInitial) {
+            // Mark all existing notifications as seen on initial load
+            const allIds = fetchedList.map((n: any) => n._id);
+            localStorage.setItem('seenNotifications', JSON.stringify(allIds));
+          } else {
+            // Find new notifications
+            const newNotifs = fetchedList.filter((n: any) => !seenIds.includes(n._id));
+            if (newNotifs.length > 0) {
+              // Trigger vibration
+              if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
+                window.navigator.vibrate([200, 100, 200]);
+              }
+              // Show popup for the latest new notification
+              setPopupNotification(newNotifs[0]);
+
+              // Update seen IDs in localStorage
+              const updatedSeenIds = [...seenIds, ...newNotifs.map((n: any) => n._id)];
+              localStorage.setItem('seenNotifications', JSON.stringify(updatedSeenIds));
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Polling notifications error:", err);
+      }
+    };
+
+    // Initial load already handled in fetchDashboardData, but we setup polling
+    const interval = setInterval(() => {
+      pollNotifications(false);
+    }, 10000); // Poll every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [mongoUser]);
 
   // Initialize draft meals to 0 by default for standard member request input
   useEffect(() => {
@@ -2213,6 +2264,36 @@ export default function Home() {
                   className="w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold transition-all text-sm"
                 >
                   পরে করব (Later)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Notification Popup Modal */}
+      {popupNotification && (
+        <div suppressHydrationWarning className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-md transition-all duration-300 animate-fadeIn">
+          <div className="bg-white/90 backdrop-blur-lg rounded-3xl p-6 max-w-sm w-full border border-indigo-100 shadow-[0_20px_50px_rgba(79,70,229,0.15)] relative overflow-hidden animate-slideUp">
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-rose-500 via-indigo-500 to-emerald-500 animate-pulse" />
+            
+            <div className="flex flex-col items-center text-center space-y-4 pt-2">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100/50 animate-bounce">
+                <Bell className="w-6 h-6" />
+              </div>
+              
+              <div>
+                <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse">নতুন নোটিফিকেশন</span>
+                <h3 className="text-base font-extrabold text-gray-955 mt-2.5 capitalize">{popupNotification.title}</h3>
+                <p className="text-xs text-gray-500 font-bold mt-2 leading-relaxed">{popupNotification.message}</p>
+              </div>
+
+              <div className="w-full pt-2">
+                <button
+                  onClick={() => setPopupNotification(null)}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all text-xs shadow-md shadow-indigo-100 hover:shadow-lg hover:shadow-indigo-200"
+                >
+                  ঠিক আছে, বন্ধ করুন
                 </button>
               </div>
             </div>
