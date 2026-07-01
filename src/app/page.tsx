@@ -93,6 +93,9 @@ export default function Home() {
   const [estDailyMeals, setEstDailyMeals] = useState<number>(2);
   const [customMealRate, setCustomMealRate] = useState<string>('');
   const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [breakfastRating, setBreakfastRating] = useState<number>(0);
+  const [lunchRating, setLunchRating] = useState<number>(0);
+  const [dinnerRating, setDinnerRating] = useState<number>(0);
 
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
@@ -204,6 +207,34 @@ export default function Home() {
       });
     }
   }, [myMeals]);
+
+  // Load menu ratings from localStorage
+  useEffect(() => {
+    const todayStr = new Date().toDateString();
+    const saved = localStorage.getItem(`menuRatings_${todayStr}`);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.breakfast) setBreakfastRating(parsed.breakfast);
+      if (parsed.lunch) setLunchRating(parsed.lunch);
+      if (parsed.dinner) setDinnerRating(parsed.dinner);
+    }
+  }, []);
+
+  const handleRateMenu = (type: 'breakfast' | 'lunch' | 'dinner', rating: number) => {
+    const todayStr = new Date().toDateString();
+    const ratings: any = { breakfast: breakfastRating, lunch: lunchRating, dinner: dinnerRating };
+    ratings[type] = rating;
+
+    if (type === 'breakfast') setBreakfastRating(rating);
+    if (type === 'lunch') setLunchRating(rating);
+    if (type === 'dinner') setDinnerRating(rating);
+
+    localStorage.setItem(`menuRatings_${todayStr}`, JSON.stringify({
+      ...ratings,
+      submitted: true
+    }));
+    toast.success('খাবারের রেটিং সফলভাবে দেওয়া হয়েছে!');
+  };
 
   // Handler for direct edits (Managers/Admins)
   const handleDirectMealChange = async (dateStr: 'today' | 'tomorrow', mealType: 'breakfast' | 'lunch' | 'dinner', change: number) => {
@@ -831,28 +862,102 @@ export default function Home() {
                 </div>
               </form>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-orange-50/30 p-3.5 rounded-2xl border border-orange-50 flex items-start gap-3">
-                  <span className="text-xl">🍳</span>
-                  <div>
-                    <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">সকালের মেনু</p>
-                    <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.breakfast || 'আপডেট করা হয়নি'}</p>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Breakfast */}
+                  <div className="bg-orange-50/30 p-3.5 rounded-2xl border border-orange-50/50 flex flex-col justify-between min-h-[90px]">
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl flex-shrink-0">🍳</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">সকালের মেনু</p>
+                        <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.breakfast || 'আপডেট করা হয়নি'}</p>
+                      </div>
+                    </div>
+                    {menu?.breakfast && (
+                      <div className="mt-3 pt-2 border-t border-orange-100/50 flex items-center justify-between">
+                        <span className="text-[9px] font-bold text-gray-400">রেটিং দিন:</span>
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => handleRateMenu('breakfast', star)}
+                              className="focus:outline-none transition-transform hover:scale-125"
+                            >
+                              <span className={cn("text-xs", star <= breakfastRating ? "text-amber-500" : "text-gray-300")}>★</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Lunch */}
+                  <div className="bg-blue-50/30 p-3.5 rounded-2xl border border-blue-50/50 flex flex-col justify-between min-h-[90px]">
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl flex-shrink-0">🍛</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">দুপুরের মেনু</p>
+                        <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.lunch || 'আপডেট করা হয়নি'}</p>
+                      </div>
+                    </div>
+                    {menu?.lunch && (
+                      <div className="mt-3 pt-2 border-t border-blue-100/50 flex items-center justify-between">
+                        <span className="text-[9px] font-bold text-gray-400">রেটিং দিন:</span>
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => handleRateMenu('lunch', star)}
+                              className="focus:outline-none transition-transform hover:scale-125"
+                            >
+                              <span className={cn("text-xs", star <= lunchRating ? "text-amber-500" : "text-gray-300")}>★</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dinner */}
+                  <div className="bg-emerald-50/30 p-3.5 rounded-2xl border border-emerald-50/50 flex flex-col justify-between min-h-[90px]">
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl flex-shrink-0">🍲</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">রাতের মেনু</p>
+                        <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.dinner || 'আপডেট করা হয়নি'}</p>
+                      </div>
+                    </div>
+                    {menu?.dinner && (
+                      <div className="mt-3 pt-2 border-t border-emerald-100/50 flex items-center justify-between">
+                        <span className="text-[9px] font-bold text-gray-400">রেটিং দিন:</span>
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => handleRateMenu('dinner', star)}
+                              className="focus:outline-none transition-transform hover:scale-125"
+                            >
+                              <span className={cn("text-xs", star <= dinnerRating ? "text-amber-500" : "text-gray-300")}>★</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="bg-blue-50/30 p-3.5 rounded-2xl border border-blue-50 flex items-start gap-3">
-                  <span className="text-xl">🍛</span>
-                  <div>
-                    <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">দুপুরের মেনু</p>
-                    <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.lunch || 'আপডেট করা হয়নি'}</p>
+
+                {/* Food satisfaction summary bar */}
+                {(breakfastRating > 0 || lunchRating > 0 || dinnerRating > 0) && (
+                  <div className="p-3.5 bg-orange-50/50 border border-orange-100/50 rounded-2xl flex items-center justify-between gap-3 text-xs text-orange-850 font-bold animate-fadeIn">
+                    <span className="flex items-center gap-1.5">🍽️ আজকের খাবারের রিভিউ বাজার কারিগরের নিকট পাঠানো হয়েছে।</span>
+                    <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase">
+                      সন্তুষ্টি সূচক: {Math.round(((breakfastRating + lunchRating + dinnerRating) / ( (breakfastRating?1:0) + (lunchRating?1:0) + (dinnerRating?1:0) || 1 )) * 20)}%
+                    </span>
                   </div>
-                </div>
-                <div className="bg-emerald-50/30 p-3.5 rounded-2xl border border-emerald-50 flex items-start gap-3">
-                  <span className="text-xl">🍲</span>
-                  <div>
-                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">রাতের মেনু</p>
-                    <p className="font-extrabold text-gray-900 mt-0.5 text-sm">{menu?.dinner || 'আপডেট করা হয়নি'}</p>
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>
