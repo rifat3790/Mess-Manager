@@ -97,6 +97,17 @@ export default function Home() {
   const [lunchRating, setLunchRating] = useState<number>(0);
   const [dinnerRating, setDinnerRating] = useState<number>(0);
 
+  const formatSafeDate = (dateVal: any, formatOpts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' }) => {
+    if (!dateVal) return 'অজানা তারিখ';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return 'অজানা তারিখ';
+      return d.toLocaleDateString('en-GB', formatOpts);
+    } catch {
+      return 'অজানা তারিখ';
+    }
+  };
+
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
   async function fetchDashboardData() {
@@ -637,7 +648,7 @@ export default function Home() {
                 {recentNotice.createdBy?.name?.split(' ')[0]} ({recentNotice.createdBy?.role}) একটি গুরুত্বপূর্ণ নোটিশ পোস্ট করেছেন: "{recentNotice.title}"
               </p>
               <p className="text-[10px] font-bold text-gray-400 mt-0.5">
-                পোস্টের সময়: {new Date(recentNotice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} • বিস্তারিত পড়তে এখানে ক্লিক করুন
+                পোস্টের সময়: {formatSafeDate(recentNotice.createdAt)} • বিস্তারিত পড়তে এখানে ক্লিক করুন
               </p>
             </div>
           </div>
@@ -1440,7 +1451,7 @@ export default function Home() {
                       <div>
                         <p className="font-bold text-gray-900 text-sm capitalize">{req.userId?.name}</p>
                         <p className="text-[10px] font-bold text-gray-500">
-                          তারিখ: {new Date(req.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                          তারিখ: {formatSafeDate(req.date)}
                         </p>
                         <div className="flex gap-2 mt-1 text-[10px] font-extrabold text-indigo-700 bg-indigo-50/50 border border-indigo-100/30 px-2 py-0.5 rounded-md w-fit">
                           <span>সকাল: {req.breakfast}</span> | <span>দুপুর: {req.lunch}</span> | <span>রাত: {req.dinner}</span>
@@ -1507,9 +1518,9 @@ export default function Home() {
                      <div className="mb-4">
                        <span className="text-xs font-semibold text-gray-400 block mb-1.5">আপনার বাজার তারিখ</span>
                        <div className="bg-gradient-to-r from-indigo-50 to-blue-50 text-indigo-900 font-bold px-4 py-3.5 rounded-xl text-sm">
-                         {new Date(mySchedule.fromDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} 
+                         {formatSafeDate(mySchedule.fromDate)} 
                          {' - '} 
-                         {new Date(mySchedule.toDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                         {formatSafeDate(mySchedule.toDate)}
                        </div>
                      </div>
                    );
@@ -1518,7 +1529,7 @@ export default function Home() {
                      <div className="mb-4">
                        <span className="text-xs font-semibold text-amber-600 block mb-1.5">রিকোয়েস্ট পেন্ডিং</span>
                        <div className="bg-amber-50 text-amber-800 font-bold px-4 py-3.5 rounded-xl text-sm">
-                         {new Date(myPending.fromDate).toLocaleDateString('en-GB')} - {new Date(myPending.toDate).toLocaleDateString('en-GB')}
+                         {formatSafeDate(myPending.fromDate, {})} - {formatSafeDate(myPending.toDate, {})}
                        </div>
                      </div>
                    );
