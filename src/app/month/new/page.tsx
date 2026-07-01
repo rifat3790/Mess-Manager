@@ -27,7 +27,7 @@ export default function NewMonthPage() {
     try {
       const res = await createNewMonthSheet(monthName, new Date(startDate), carryOverBalance);
       if (res.success) {
-        setMessage(`সফলভাবে "${monthName}" মাস তৈরি করা হয়েছে এবং গুগল শিটে নতুন ট্যাব যুক্ত হয়েছে!`);
+        setMessage(`সফলভাবে "${monthName}" মাস তৈরি করা হয়েছে!`);
         setMonthName('');
         setStartDate('');
         setCarryOverBalance(false);
@@ -49,7 +49,7 @@ export default function NewMonthPage() {
             <CalendarPlus className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-3xl font-bold text-white">নতুন মাস শুরু করুন</h2>
-          <p className="text-purple-100 mt-2">আপনার গুগল শিটে অটোমেটিক একটি নতুন ট্যাব তৈরি হবে</p>
+          <p className="text-purple-100 mt-2">আপনার ডাটাবেজে একটি নতুন মাস তৈরি হবে</p>
         </div>
         
         <div className="p-8">

@@ -112,7 +112,7 @@ export default function ExpensePage() {
       );
       
       if (res.success) {
-        toast.success('খরচ সফলভাবে যুক্ত হয়েছে এবং গুগল শিটে আপডেট হয়েছে!');
+        toast.success('খরচ সফলভাবে যুক্ত হয়েছে!');
         setAmount('');
         setDescription('');
       } else {

@@ -130,7 +130,7 @@ export default function MealPage() {
       const res = await addBulkMeals(activeMonth._id, new Date(date), bulkData);
       
       if (res.success) {
-        toast.success('সকলের মিল সফলভাবে যুক্ত হয়েছে এবং গুগল শিটে আপডেট হয়েছে!');
+        toast.success('সকলের মিল সফলভাবে যুক্ত হয়েছে!');
         const resetMeals: any = {};
         members.forEach(m => { resetMeals[m._id] = { breakfast: 0, lunch: 0, dinner: 0 }; });
         setMealsData(resetMeals);

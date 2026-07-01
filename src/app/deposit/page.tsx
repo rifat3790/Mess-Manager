@@ -57,7 +57,7 @@ export default function DepositPage() {
     try {
       const res = await addDeposit(activeMonth._id, userId, Number(amount), new Date(date));
       if (res.success) {
-        toast.success('টাকা জমা সফলভাবে যুক্ত হয়েছে এবং গুগল শিটে আপডেট হয়েছে!');
+        toast.success('টাকা জমা সফলভাবে যুক্ত হয়েছে!');
         setAmount('');
       } else {
         toast.error(res.error || 'জমা যুক্ত করতে সমস্যা হয়েছে।');
