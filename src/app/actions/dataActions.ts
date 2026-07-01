@@ -52,7 +52,11 @@ export async function addMeal(monthId: string, userId: string, date: Date, mealC
       }
     }
 
-    await createNotification("নতুন মিল যুক্ত হয়েছে", `আপনার অ্যাকাউন্টে নতুন মিল যুক্ত হয়েছে। যোগ করা হয়েছে: ${mealCount} টি। বর্তমান মোট মিল: ${meal.mealCount.toFixed(1)} টি।`, userId);
+    // Calculate user's total meals in the month
+    const userMeals = await Meal.find({ monthId, userId });
+    const userTotalMeals = userMeals.reduce((sum, m) => sum + m.mealCount, 0);
+
+    await createNotification("নতুন মিল যুক্ত হয়েছে", `আপনার অ্যাকাউন্টে নতুন মিল যুক্ত হয়েছে। যোগ করা হয়েছে: ${mealCount} টি। বর্তমান মোট মিল: ${userTotalMeals.toFixed(1)} টি।`, userId);
 
     revalidatePath('/', 'layout');
     return { success: true, meal: JSON.parse(JSON.stringify(meal)) };
@@ -555,7 +559,11 @@ export async function addBulkMeals(monthId: string, date: Date, mealsData: { use
             console.error("Sheets update error in addBulkMeals:", sheetErr);
           }
         }
-        await createNotification("নতুন মিল যুক্ত হয়েছে", `আপনার অ্যাকাউন্টে নতুন মিল যুক্ত হয়েছে। যোগ করা হয়েছে: ${data.mealCount} টি। বর্তমান মোট মিল: ${existing.mealCount.toFixed(1)} টি।`, data.userId);
+        // Calculate user's total meals in the active month
+        const userMeals = await Meal.find({ monthId, userId: data.userId });
+        const userTotalMeals = userMeals.reduce((sum, m) => sum + m.mealCount, 0);
+
+        await createNotification("নতুন মিল যুক্ত হয়েছে", `আপনার অ্যাকাউন্টে নতুন মিল যুক্ত হয়েছে। যোগ করা হয়েছে: ${data.mealCount} টি। বর্তমান মোট মিল: ${userTotalMeals.toFixed(1)} টি।`, data.userId);
       } else {
         const newMeal = new Meal({ 
           monthId, 
@@ -584,7 +592,11 @@ export async function addBulkMeals(monthId: string, date: Date, mealsData: { use
             console.error("Sheets sync error in addBulkMeals:", sheetErr);
           }
         }
-        await createNotification("নতুন মিল যুক্ত হয়েছে", `আপনার অ্যাকাউন্টে নতুন মিল যুক্ত হয়েছে। যোগ করা হয়েছে: ${data.mealCount} টি। বর্তমান মোট মিল: ${newMeal.mealCount.toFixed(1)} টি।`, data.userId);
+        // Calculate user's total meals in the active month
+        const userMeals = await Meal.find({ monthId, userId: data.userId });
+        const userTotalMeals = userMeals.reduce((sum, m) => sum + m.mealCount, 0);
+
+        await createNotification("নতুন মিল যুক্ত হয়েছে", `আপনার অ্যাকাউন্টে নতুন মিল যুক্ত হয়েছে। যোগ করা হয়েছে: ${data.mealCount} টি। বর্তমান মোট মিল: ${userTotalMeals.toFixed(1)} টি।`, data.userId);
       }
     }
 
