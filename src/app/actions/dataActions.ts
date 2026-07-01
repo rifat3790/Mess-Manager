@@ -706,6 +706,10 @@ export async function updateUserMealForDate(
         } catch (sheetErr) {
           console.error("Sheets delete error:", sheetErr);
         }
+        await createNotification(
+          "মিল বাতিল",
+          `${user.name}-এর ${dateStr === 'today' ? 'আজকের' : 'আগামীকালের'} মিলের ${mealType === 'breakfast' ? 'সকাল' : mealType === 'lunch' ? 'দুপুর' : 'রাত'}-এর মিল বাতিল করা হয়েছে।`
+        );
       } else {
         await existing.save();
         try {
@@ -717,6 +721,10 @@ export async function updateUserMealForDate(
         } catch (sheetErr) {
           console.error("Sheets update error:", sheetErr);
         }
+        await createNotification(
+          "মিল আপডেট",
+          `${user.name}-এর ${dateStr === 'today' ? 'আজকের' : 'আগামীকালের'} মিলের ${mealType === 'breakfast' ? 'সকাল' : mealType === 'lunch' ? 'দুপুর' : 'রাত'}-এর মিল আপডেট করে ${newValue} টি করা হয়েছে।`
+        );
       }
     } else {
       if (newValue > 0) {
@@ -744,6 +752,10 @@ export async function updateUserMealForDate(
         } catch (sheetErr) {
           console.error("Sheets sync error:", sheetErr);
         }
+        await createNotification(
+          "নতুন মিল যুক্ত",
+          `${user.name}-এর জন্য ${dateStr === 'today' ? 'আজকের' : 'আগামীকালের'} মিলের ${mealType === 'breakfast' ? 'সকাল' : mealType === 'lunch' ? 'দুপুর' : 'রাত'}-এর মিল ${newValue} টি যুক্ত করা হয়েছে।`
+        );
       }
     }
 
