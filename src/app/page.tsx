@@ -1446,7 +1446,7 @@ export default function Home() {
                   <div key={req._id} className="bg-amber-50/30 border border-amber-100/50 p-4 rounded-2xl flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold flex-shrink-0">
-                        {req.userId?.name?.charAt(0).toUpperCase()}
+                        {(req.userId?.name?.charAt(0) || 'U').toUpperCase()}
                       </div>
                       <div>
                         <p className="font-bold text-gray-900 text-sm capitalize">{req.userId?.name}</p>
@@ -1615,7 +1615,7 @@ export default function Home() {
                      <div className="space-y-3">
                        <div className="flex items-center gap-3 bg-rose-50/50 p-3.5 rounded-2xl border border-rose-100/50">
                          <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-750 flex items-center justify-center font-bold flex-shrink-0">
-                           {todayBazaar.userId?.name?.charAt(0).toUpperCase()}
+                           {(todayBazaar.userId?.name?.charAt(0) || 'U').toUpperCase()}
                          </div>
                          <div>
                            <p className="font-extrabold text-sm text-gray-900 capitalize">{todayBazaar.userId?.name}</p>
@@ -1912,7 +1912,7 @@ export default function Home() {
                              "w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-sm",
                              idx % 4 === 0 ? 'bg-blue-500' : idx % 4 === 1 ? 'bg-emerald-500' : idx % 4 === 2 ? 'bg-indigo-500' : 'bg-rose-500'
                            )}>
-                             {member.name.charAt(0).toUpperCase()}
+                             {(member.name?.charAt(0) || 'U').toUpperCase()}
                            </div>
                            <div suppressHydrationWarning>
                              <p className="font-bold text-gray-900 capitalize text-sm">{member.name}</p>
