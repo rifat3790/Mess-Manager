@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth, MongoUser } from '@/context/AuthContext';
-import { ShoppingBag, Loader2, Check, Sparkles, Plus, Info, Landmark } from 'lucide-react';
-import { getActiveMonth, getMembers, addExpense } from '@/app/actions/dataActions';
+import { ShoppingBag, Loader2, Check, Sparkles, Plus, Info, Landmark, Trash2, Edit2, History, Calendar } from 'lucide-react';
+import { getActiveMonth, getMembers, addExpense, deleteExpense, updateExpense, getDashboardData } from '@/app/actions/dataActions';
 import { toast } from 'react-hot-toast';
 
 export default function ExpensePage() {
@@ -23,6 +23,15 @@ export default function ExpensePage() {
   
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  
+  const [expensesList, setExpensesList] = useState<any[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  
+  // Edit expense states
+  const [editingEntry, setEditingEntry] = useState<any>(null);
+  const [editAmount, setEditAmount] = useState<string>('');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Suggested tags for easy expense insertion
   const expenseSuggestions = [
@@ -42,11 +51,19 @@ export default function ExpensePage() {
     fetchInitialData();
   }, []);
 
+  const refreshExpensesList = async () => {
+    const res = await getDashboardData();
+    if (res.success && res.expenses) {
+      setExpensesList(res.expenses.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    }
+  };
+
   const fetchInitialData = async () => {
     try {
-      const [monthRes, membersRes] = await Promise.all([
+      const [monthRes, membersRes, dashboardRes] = await Promise.all([
         getActiveMonth(),
-        getMembers()
+        getMembers(),
+        getDashboardData()
       ]);
 
       if (monthRes.success) setActiveMonth(monthRes.month);
@@ -54,14 +71,65 @@ export default function ExpensePage() {
         setMembers(membersRes.users);
         if (membersRes.users.length > 0) {
           setUserId(membersRes.users[0]._id);
-          // By default select all members for shared cost
           setSharedBetween(membersRes.users.map((m: any) => m._id));
         }
+      }
+      if (dashboardRes.success && dashboardRes.expenses) {
+        setExpensesList(dashboardRes.expenses.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       }
     } catch (err) {
       console.error(err);
     } finally {
       setFetching(false);
+    }
+  };
+
+  const handleDeleteExpense = async (id: string) => {
+    if (!window.confirm('আপনি কি নিশ্চিত যে এই খরচটি ডিলিট করতে চান?')) return;
+    setDeletingId(id);
+    try {
+      const res = await deleteExpense(id);
+      if (res.success) {
+        toast.success('খরচ সফলভাবে ডিলিট হয়েছে!');
+        refreshExpensesList();
+      } else {
+        toast.error('ডিলিট করতে সমস্যা হয়েছে: ' + res.error);
+      }
+    } catch (err: any) {
+      toast.error('ভুল হয়েছে: ' + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleOpenEdit = (entry: any) => {
+    setEditingEntry(entry);
+    setEditAmount(entry.amount.toString());
+    setEditDescription(entry.description || '');
+  };
+
+  const handleCloseEdit = () => {
+    setEditingEntry(null);
+    setEditAmount('');
+    setEditDescription('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingEntry) return;
+    setIsSaving(true);
+    try {
+      const res = await updateExpense(editingEntry._id, Number(editAmount), editDescription);
+      if (res.success) {
+        toast.success('খরচ সফলভাবে আপডেট হয়েছে!');
+        handleCloseEdit();
+        refreshExpensesList();
+      } else {
+        toast.error('আপডেট করতে সমস্যা হয়েছে: ' + res.error);
+      }
+    } catch (err: any) {
+      toast.error('ভুল হয়েছে: ' + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -115,6 +183,7 @@ export default function ExpensePage() {
         toast.success('খরচ সফলভাবে যুক্ত হয়েছে!');
         setAmount('');
         setDescription('');
+        refreshExpensesList();
       } else {
         toast.error(res.error || 'খরচ যুক্ত করতে সমস্যা হয়েছে।');
       }
@@ -143,7 +212,7 @@ export default function ExpensePage() {
   }
 
   return (
-    <div suppressHydrationWarning className="w-full mt-2 space-y-6 pb-16">
+    <div suppressHydrationWarning className="w-full mt-2 space-y-8 pb-20">
       
       {/* Header Widget */}
       <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-3xl p-6 border border-rose-100 flex items-center gap-5 shadow-[0_8px_30px_rgb(244,63,94,0.02)]">
@@ -151,14 +220,21 @@ export default function ExpensePage() {
           <ShoppingBag className="w-7 h-7" />
         </div>
         <div>
-          <h2 className="text-2xl font-black text-gray-900 tracking-tight">খরচ যুক্ত করুন (অ্যাডমিন প্যানেল)</h2>
+          <h2 className="text-2xl font-black text-gray-900 tracking-tight">খরচ যুক্ত ও নিয়ন্ত্রণ করুন (Expenses Dashboard)</h2>
           <p className="text-gray-500 mt-0.5 text-xs font-semibold">
             চলমান মাস: <span className="text-rose-600 bg-rose-100/50 px-2 py-0.5 rounded font-black">{activeMonth?.name || 'কোনো মাস শুরু হয়নি'}</span>
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-150 p-6 md:p-8">
+      {/* Two Column Layout: Left Form, Right List */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Column: Form Card */}
+        <div className="lg:col-span-6 bg-white rounded-3xl shadow-sm border border-gray-150 p-6 md:p-8">
+          <div className="flex items-center gap-2 mb-6 border-b border-gray-50 pb-3">
+            <Plus className="w-5 h-5 text-rose-500" />
+            <h3 className="font-extrabold text-gray-900 text-base">নতুন খরচ যুক্ত করুন</h3>
+          </div>
         <form onSubmit={handleSubmit} className="space-y-6">
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -325,7 +401,134 @@ export default function ExpensePage() {
             </button>
           </div>
         </form>
+        </div>
+
+        {/* Right Column: Recent Expenses list */}
+        <div className="lg:col-span-6 space-y-6">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-150 p-6">
+            <div className="flex items-center justify-between mb-6 border-b border-gray-50 pb-3">
+              <div className="flex items-center gap-2">
+                <History className="w-5 h-5 text-indigo-500" />
+                <h3 className="font-extrabold text-gray-900 text-base">সাম্প্রতিক খরচসমূহ (Recent Expenses)</h3>
+              </div>
+              <span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-md">
+                মোট: {expensesList.length}টি খরচ
+              </span>
+            </div>
+
+            {/* List */}
+            <div className="space-y-3.5 max-h-[500px] overflow-y-auto pr-1">
+              {expensesList.length === 0 ? (
+                <div className="text-center py-10 text-gray-400 text-xs font-bold bg-gray-50 rounded-2xl border border-gray-100">
+                  চলমান মাসে এখনো কোনো খরচ যুক্ত করা হয়নি।
+                </div>
+              ) : (
+                expensesList.map((expense) => {
+                  const memberName = expense.userId ? (members.find(m => m._id === expense.userId)?.name || 'সদস্য') : 'মেস কমিটি';
+                  return (
+                    <div key={expense._id} className="flex items-center justify-between p-4 bg-gray-50/50 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all group">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                            expense.type === 'Meal' ? 'bg-blue-100 text-blue-700' :
+                            expense.type === 'Joint' ? 'bg-emerald-100 text-emerald-700' :
+                            'bg-rose-100 text-rose-700'
+                          }`}>
+                            {expense.type}
+                          </span>
+                          <span className="text-[10px] font-bold text-gray-400 flex items-center gap-0.5">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(expense.date).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-xs font-black text-gray-800 capitalize truncate">{expense.description}</p>
+                        <p className="text-[10px] font-bold text-gray-400">ব্যয়কারী: <span className="text-gray-600 capitalize">{memberName}</span></p>
+                      </div>
+                      <div className="flex items-center gap-3.5">
+                        <span className="text-sm font-black text-gray-900">{expense.amount} ৳</span>
+                        
+                        {/* Actions */}
+                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(expense)}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="এডিট করুন"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExpense(expense._id)}
+                            disabled={deletingId === expense._id}
+                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
+                            title="ডিলিট করুন"
+                          >
+                            {deletingId === expense._id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Edit Modal */}
+      {editingEntry && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-gray-100">
+              <h3 className="text-lg font-extrabold text-gray-900">খরচ আপডেট করুন</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">টাকার পরিমাণ</label>
+                <input 
+                  type="number"
+                  required
+                  value={editAmount}
+                  onChange={e => setEditAmount(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 font-bold text-sm text-gray-800 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">বিবরণ</label>
+                <input 
+                  type="text"
+                  required
+                  value={editDescription}
+                  onChange={e => setEditDescription(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 font-bold text-sm text-gray-800 outline-none"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50/50">
+              <button 
+                onClick={handleCloseEdit}
+                className="px-5 py-2.5 rounded-xl font-bold text-xs text-gray-600 hover:bg-gray-200 transition-colors"
+              >
+                বাতিল
+              </button>
+              <button 
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                className="px-5 py-2.5 rounded-xl font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white transition-colors flex items-center gap-2"
+              >
+                {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                সেভ করুন
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

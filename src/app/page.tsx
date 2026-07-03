@@ -119,6 +119,7 @@ export default function Home() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [popupNotification, setPopupNotification] = useState<any | null>(null);
+  const [announcementCountdown, setAnnouncementCountdown] = useState<string>('');
 
   // Emergency Contacts state
   const [contacts, setContacts] = useState<any[]>([]);
@@ -352,6 +353,41 @@ export default function Home() {
     fetchPendingRequests();
     fetchMenuAndNotices();
   }, [user, mongoUser]);
+
+  // Live countdown for new announcement banner
+  useEffect(() => {
+    if (!recentNotice) return;
+    const updateCountdown = () => {
+      const createdAt = new Date(recentNotice.createdAt);
+      // Banner stays for 3 days (72 hours)
+      const expiresAt = new Date(createdAt.getTime() + 3 * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const diff = expiresAt.getTime() - now.getTime();
+      if (diff <= 0) {
+        setAnnouncementCountdown('Expired');
+      } else {
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setAnnouncementCountdown(`${hours} ঘণ্টা ${minutes} মিনিট ${seconds} সেকেন্ড`);
+      }
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [recentNotice]);
+
+  // Polling for entire dashboard data every 10 seconds (AJAX real-time updates)
+  useEffect(() => {
+    if (!mongoUser || mongoUser.role === 'Pending') return;
+    const interval = setInterval(() => {
+      fetchDashboardData();
+      fetchUserMeals();
+      fetchPendingRequests();
+      fetchMenuAndNotices();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [mongoUser]);
 
   // Polling for live notifications (AJAX style real-time updates)
   useEffect(() => {
@@ -895,7 +931,14 @@ export default function Home() {
               <Bell className="w-5.5 h-5.5" />
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider">মেস নোটিশ (New announcement)</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider">মেস নোটিশ (New announcement)</span>
+                {announcementCountdown && announcementCountdown !== 'Expired' && (
+                  <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md animate-pulse border border-amber-200">
+                    ⏱️ ব্যানার মেয়াদ বাকি: {announcementCountdown}
+                  </span>
+                )}
+              </div>
               <p className="font-extrabold text-sm text-gray-800 mt-1 truncate">
                 {recentNotice.createdBy?.name ? recentNotice.createdBy.name.split(' ')[0] : 'অ্যাডমিন'} ({recentNotice.createdBy?.role || 'ম্যানেজার'}) একটি গুরুত্বপূর্ণ নোটিশ পোস্ট করেছেন: "{recentNotice.title}"
               </p>

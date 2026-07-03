@@ -440,7 +440,7 @@ export async function getDashboardData() {
       };
     });
 
-    return { success: true, stats: globalStats, members: memberStats };
+    return { success: true, stats: globalStats, members: memberStats, expenses: JSON.parse(JSON.stringify(expenses)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

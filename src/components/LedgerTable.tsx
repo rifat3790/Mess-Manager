@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2, Trash2, Edit, Activity } from 'lucide-react';
+import { Loader2, Trash2, Edit, Activity, Search, Utensils, Wallet, ShoppingBag } from 'lucide-react';
 import { getLedgerData } from '@/app/actions/ledgerActions';
 import { deleteMeal, deleteExpense, deleteDeposit, updateMeal, updateExpense, updateDeposit } from '@/app/actions/dataActions';
 import { toast } from 'react-hot-toast';
@@ -17,6 +17,8 @@ export function LedgerTable() {
   const [editAmount, setEditAmount] = useState<string>('');
   const [editDescription, setEditDescription] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'meal' | 'deposit' | 'expense'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -94,68 +96,174 @@ export function LedgerTable() {
 
   const canEdit = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
+  // Filter and Search logic
+  const filteredEntries = entries.filter(entry => {
+    // 1. Tab filter
+    if (activeTab === 'meal' && entry.type !== 'Meal') return false;
+    if (activeTab === 'deposit' && entry.type !== 'Deposit') return false;
+    if (activeTab === 'expense' && !entry.type.startsWith('Expense')) return false;
+
+    // 2. Search filter
+    if (searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      const nameMatch = entry.memberName?.toLowerCase().includes(term);
+      const descMatch = entry.description?.toLowerCase().includes(term);
+      const typeMatch = entry.type?.toLowerCase().includes(term);
+      return nameMatch || descMatch || typeMatch;
+    }
+
+    return true;
+  });
+
+  // Calculate summaries for filtered/active view
+  const summary = {
+    meals: entries.filter(e => e.type === 'Meal').reduce((sum, e) => sum + e.amount, 0),
+    deposits: entries.filter(e => e.type === 'Deposit').reduce((sum, e) => sum + e.amount, 0),
+    expenses: entries.filter(e => e.type.startsWith('Expense')).reduce((sum, e) => sum + e.amount, 0)
+  };
+
   return (
     <div className="w-full space-y-6 mt-8">
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center gap-4">
-        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-          <Activity className="w-6 h-6" />
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-3xl p-6 border border-blue-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-md shadow-indigo-100">
+            <Activity className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-gray-900">চলমান মাসের হিসাব ও লেনদেন (Ledger)</h2>
+            <p className="text-gray-500 text-xs font-semibold mt-0.5">মেসের রানিং মাসের সকল আয়, ব্যয় ও মিলের খতিয়ান</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">সকল লেনদেন (Ledger)</h2>
-          <p className="text-gray-500 text-sm mt-1">মেসের সকল আয়-ব্যয়ের বিস্তারিত ইতিহাস</p>
+        
+        {/* Search bar */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="মেম্বার বা বিবরণী দিয়ে খুঁজুন..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 w-full sm:w-[240px] transition-all outline-none"
+          />
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
         </div>
       </div>
 
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Total Meals */}
+        <div className="bg-white rounded-2xl p-4.5 border border-gray-100 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center flex-shrink-0">
+            <Utensils className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-lg font-black text-gray-900">{summary.meals.toFixed(1)}টি</p>
+            <p className="text-[10px] font-bold text-gray-400 mt-0.5 uppercase tracking-wider">চলমান মাসের মোট মিল</p>
+          </div>
+        </div>
+
+        {/* Total Deposit */}
+        <div className="bg-white rounded-2xl p-4.5 border border-gray-100 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-500 flex items-center justify-center flex-shrink-0">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-lg font-black text-gray-900">{summary.deposits.toFixed(0)} ৳</p>
+            <p className="text-[10px] font-bold text-gray-400 mt-0.5 uppercase tracking-wider">চলমান মাসের মোট জমা</p>
+          </div>
+        </div>
+
+        {/* Total Expense */}
+        <div className="bg-white rounded-2xl p-4.5 border border-gray-100 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center flex-shrink-0">
+            <ShoppingBag className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-lg font-black text-gray-900">{summary.expenses.toFixed(0)} ৳</p>
+            <p className="text-[10px] font-bold text-gray-400 mt-0.5 uppercase tracking-wider">চলমান মাসের মোট ব্যয়</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs Menu */}
+      <div className="flex bg-gray-100/80 p-1 rounded-2xl text-xs font-black self-start w-full overflow-x-auto gap-1">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`flex-1 py-3 px-4 rounded-xl transition-all whitespace-nowrap ${activeTab === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+        >
+          📄 সব লেনদেন ({entries.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('meal')}
+          className={`flex-1 py-3 px-4 rounded-xl transition-all whitespace-nowrap ${activeTab === 'meal' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+        >
+          🍳 মিল খতিয়ান ({entries.filter(e => e.type === 'Meal').length})
+        </button>
+        <button
+          onClick={() => setActiveTab('deposit')}
+          className={`flex-1 py-3 px-4 rounded-xl transition-all whitespace-nowrap ${activeTab === 'deposit' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+        >
+          💵 জমা সমূহ ({entries.filter(e => e.type === 'Deposit').length})
+        </button>
+        <button
+          onClick={() => setActiveTab('expense')}
+          className={`flex-1 py-3 px-4 rounded-xl transition-all whitespace-nowrap ${activeTab === 'expense' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+        >
+          🛍️ বাজার ও খরচ ({entries.filter(e => e.type.startsWith('Expense')).length})
+        </button>
+      </div>
+
+      {/* Table Card */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50/50">
-                <th className="p-4 text-sm font-bold text-gray-500 uppercase">তারিখ</th>
-                <th className="p-4 text-sm font-bold text-gray-500 uppercase">মেম্বার</th>
-                <th className="p-4 text-sm font-bold text-gray-500 uppercase">ধরন</th>
-                <th className="p-4 text-sm font-bold text-gray-500 uppercase">বিবরণ</th>
-                <th className="p-4 text-sm font-bold text-gray-500 uppercase text-right">পরিমাণ/মিল</th>
-                {canEdit && <th className="p-4 text-sm font-bold text-gray-500 uppercase text-center">অ্যাকশন</th>}
+              <tr className="border-b border-gray-150 bg-gray-50/50">
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">তারিখ</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">মেম্বার</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">ধরন</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">বিবরণ</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">পরিমাণ/মিল</th>
+                {canEdit && <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">অ্যাকশন</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {entries.length === 0 ? (
+              {filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500">
-                    কোনো তথ্য পাওয়া যায়নি।
+                  <td colSpan={6} className="p-12 text-center text-gray-400 text-xs font-bold">
+                    কোনো লেনদেনের তথ্য পাওয়া যায়নি।
                   </td>
                 </tr>
               ) : (
-                entries.map((entry) => (
-                  <tr key={entry._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="p-4 text-sm font-semibold text-gray-700 whitespace-nowrap">
-                      {new Date(entry.date).toLocaleDateString()}
+                filteredEntries.map((entry) => (
+                  <tr key={entry._id} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="p-4 text-xs font-semibold text-gray-700 whitespace-nowrap">
+                      {new Date(entry.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
-                    <td className="p-4 text-sm font-bold text-gray-900 capitalize">
+                    <td className="p-4 text-xs font-bold text-gray-900 capitalize">
                       {entry.memberName}
                     </td>
-                    <td className="p-4 text-sm text-gray-600">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        entry.type === 'Meal' ? 'bg-blue-100 text-blue-700' :
-                        entry.type === 'Deposit' ? 'bg-teal-100 text-teal-700' :
-                        'bg-rose-100 text-rose-700'
+                    <td className="p-4 text-xs text-gray-600">
+                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                        entry.type === 'Meal' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                        entry.type === 'Deposit' ? 'bg-teal-50 text-teal-700 border border-teal-100' :
+                        'bg-rose-50 text-rose-700 border border-rose-100'
                       }`}>
                         {entry.type}
                       </span>
                     </td>
-                    <td className="p-4 text-sm text-gray-600 font-medium">
+                    <td className="p-4 text-xs text-gray-600 font-semibold capitalize">
                       {entry.description}
                     </td>
-                    <td className="p-4 text-sm font-black text-gray-900 text-right">
-                      {entry.type === 'Meal' ? entry.amount : `${entry.amount} ৳`}
+                    <td className="p-4 text-xs font-black text-gray-900 text-right">
+                      {entry.type === 'Meal' ? `${entry.amount.toFixed(1)} টি` : `${entry.amount} ৳`}
                     </td>
                     {canEdit && (
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => openEditModal(entry)}
-                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                             title="এডিট করুন"
                           >
                             <Edit className="w-4 h-4" />
@@ -163,7 +271,7 @@ export function LedgerTable() {
                           <button
                             onClick={() => handleDelete(entry._id, entry.type)}
                             disabled={isDeleting === entry._id}
-                            className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
+                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
                             title="ডিলিট করুন"
                           >
                             {isDeleting === entry._id ? (
