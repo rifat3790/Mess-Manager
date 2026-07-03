@@ -12,9 +12,9 @@ export interface IExpense extends Document {
 }
 
 const ExpenseSchema: Schema = new Schema({
-  monthId: { type: Schema.Types.ObjectId, ref: 'Month', required: true },
-  userId: { type: Schema.Types.ObjectId, ref: 'User' },
-  sharedBetween: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  monthId: { type: Schema.Types.ObjectId, ref: 'Month', required: true, index: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+  sharedBetween: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
   type: { type: String, enum: ['Meal', 'Joint', 'Single'], required: true },
   amount: { type: Number, required: true },
   description: { type: String, required: true },

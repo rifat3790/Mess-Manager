@@ -12,8 +12,8 @@ export interface IMeal extends Document {
 }
 
 const MealSchema: Schema = new Schema({
-  monthId: { type: Schema.Types.ObjectId, ref: 'Month', required: true },
-  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  monthId: { type: Schema.Types.ObjectId, ref: 'Month', required: true, index: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   date: { type: Date, required: true },
   breakfast: { type: Number, default: 0 },
   lunch: { type: Number, default: 0 },

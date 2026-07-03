@@ -9,8 +9,8 @@ export interface IDeposit extends Document {
 }
 
 const DepositSchema: Schema = new Schema({
-  monthId: { type: Schema.Types.ObjectId, ref: 'Month', required: true },
-  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  monthId: { type: Schema.Types.ObjectId, ref: 'Month', required: true, index: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   amount: { type: Number, required: true },
   date: { type: Date, required: true },
   createdAt: { type: Date, default: Date.now },

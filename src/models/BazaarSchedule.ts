@@ -10,8 +10,8 @@ export interface IBazaarSchedule extends Document {
 }
 
 const BazaarScheduleSchema: Schema = new Schema({
-  monthId: { type: Schema.Types.ObjectId, ref: 'Month', required: true },
-  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  monthId: { type: Schema.Types.ObjectId, ref: 'Month', required: true, index: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   fromDate: { type: Date, required: true },
   toDate: { type: Date, required: true },
   status: { type: String, enum: ['Pending', 'Approved', 'Completed'], default: 'Pending' },

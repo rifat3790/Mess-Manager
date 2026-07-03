@@ -10,7 +10,7 @@ export interface INotice extends Document {
 const NoticeSchema: Schema = new Schema({
   title: { type: String, required: true },
   content: { type: String, required: true },
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   createdAt: { type: Date, default: Date.now },
 });
 

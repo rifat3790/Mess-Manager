@@ -29,8 +29,13 @@ export default function SingleReportPage() {
   }, []);
 
   const handleRemoveMember = async (member: any) => {
-    if (member.totalMeal > 0 || member.deposit > 0 || member.singleCost > 0) {
-      toast.error('এই মেম্বারকে রিমুভ করা সম্ভব নয়। চলমান মাসে তার নামে মিল, জমা বা একক খরচ যুক্ত আছে। মেম্বার ডিলিট করতে হলে সব রেকর্ড ০ (শূন্য) হতে হবে।');
+    if (member.totalMeal > 0 || member.deposit > 0 || member.singleCost > 0 || (member.jointCost || 0) > 0) {
+      const reasons = [];
+      if (member.totalMeal > 0) reasons.push(`মিল (${member.totalMeal}টি)`);
+      if (member.deposit > 0) reasons.push(`জমা (${member.deposit}৳)`);
+      if (member.singleCost > 0) reasons.push(`একক খরচ (${member.singleCost}৳)`);
+      if ((member.jointCost || 0) > 0) reasons.push(`যৌথ খরচ (${member.jointCost.toFixed(2)}৳)`);
+      toast.error(`এই মেম্বারকে রিমুভ করা সম্ভব নয়। চলমান মাসে তার রেকর্ড রয়েছে — ${reasons.join(', ')}। মেম্বার ডিলিট করতে হলে সব রেকর্ড ০ (শূন্য) হতে হবে।`);
       return;
     }
     
