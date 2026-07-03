@@ -58,7 +58,7 @@ import {
   submitMenuRating,
   getMenuRatings
 } from './actions/dataActions';
-import { getBazaarSchedules } from './actions/bazaarActions';
+import { getBazaarSchedules, getBazaarChecklist, addBazaarChecklistItem, toggleBazaarChecklistItem, deleteBazaarChecklistItem } from './actions/bazaarActions';
 import { getNotifications } from './actions/notificationActions';
 import { getContacts, saveContact, deleteContact } from './actions/adminActions';
 import { useRouter } from 'next/navigation';
@@ -129,6 +129,11 @@ export default function Home() {
   const [contactPhone, setContactPhone] = useState('');
   const [contactSubmitLoading, setContactSubmitLoading] = useState(false);
 
+  // Bazaar Checklist state
+  const [bazaarChecklist, setBazaarChecklist] = useState<any[]>([]);
+  const [newChecklistItem, setNewChecklistItem] = useState('');
+  const [checklistSubmitLoading, setChecklistSubmitLoading] = useState(false);
+
   const formatSafeDate = (dateVal: any, formatOpts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' }) => {
     if (!dateVal) return 'অজানা তারিখ';
     try {
@@ -179,11 +184,12 @@ export default function Home() {
     }
     
     try {
-      const [res, scheduleRes, notificationRes, contactsRes] = await Promise.all([
+      const [res, scheduleRes, notificationRes, contactsRes, checklistRes] = await Promise.all([
         getDashboardData(),
         getBazaarSchedules(),
         getNotifications(mongoUser._id),
-        getContacts()
+        getContacts(),
+        getBazaarChecklist()
       ]);
 
       if (scheduleRes.success) {
@@ -196,6 +202,10 @@ export default function Home() {
 
       if (contactsRes.success) {
         setContacts(contactsRes.contacts || []);
+      }
+
+      if (checklistRes.success) {
+        setBazaarChecklist(checklistRes.items || []);
       }
 
       if (res.success) {
@@ -598,6 +608,55 @@ export default function Home() {
     }
   };
   
+  const handleAddChecklistItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newChecklistItem.trim() || !mongoUser) return;
+    setChecklistSubmitLoading(true);
+    try {
+      const res = await addBazaarChecklistItem(mongoUser._id, newChecklistItem.trim());
+      if (res.success) {
+        toast.success("চেকলিস্টে আইটেম যোগ হয়েছে!");
+        setNewChecklistItem('');
+        fetchDashboardData();
+      } else {
+        toast.error(res.error || "সংরক্ষণ করতে সমস্যা হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ভুল হয়েছে।");
+    } finally {
+      setChecklistSubmitLoading(false);
+    }
+  };
+
+  const handleToggleChecklistItem = async (id: string, isCompleted: boolean) => {
+    try {
+      const res = await toggleBazaarChecklistItem(id, !isCompleted);
+      if (res.success) {
+        toast.success("আইটেম স্ট্যাটাস আপডেট হয়েছে!");
+        fetchDashboardData();
+      } else {
+        toast.error(res.error || "আপডেট করতে সমস্যা হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ভুল হয়েছে।");
+    }
+  };
+
+  const handleDeleteChecklistItem = async (id: string) => {
+    if (!mongoUser || !window.confirm("আপনি কি নিশ্চিতভাবে আইটেমটি ডিলিট করতে চান?")) return;
+    try {
+      const res = await deleteBazaarChecklistItem(mongoUser._id, id);
+      if (res.success) {
+        toast.success("আইটেম ডিলিট হয়েছে!");
+        fetchDashboardData();
+      } else {
+        toast.error(res.error || "ডিলিট করতে সমস্যা হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ভুল হয়েছে।");
+    }
+  };
+
   if (authLoading) {
     return (
       <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -1894,17 +1953,24 @@ export default function Home() {
                  আমার বাজার শিডিউল
                </h3>
                {(() => {
-                 const mySchedule = bazaarSchedules.find(s => s.userId?._id === mongoUser._id && s.status === 'Approved');
-                 const myPending = bazaarSchedules.find(s => s.userId?._id === mongoUser._id && s.status === 'Pending');
-                 const myCompleted = bazaarSchedules.find(s => s.userId?._id === mongoUser._id && s.status === 'Completed');
+                 const mySchedule = bazaarSchedules.find(s => (s.userId?._id?.toString() === mongoUser?._id?.toString() || s.userId?.toString() === mongoUser?._id?.toString()) && s.status === 'Approved');
+                 const myPending = bazaarSchedules.find(s => (s.userId?._id?.toString() === mongoUser?._id?.toString() || s.userId?.toString() === mongoUser?._id?.toString()) && s.status === 'Pending');
+                 const myCompleted = bazaarSchedules.find(s => (s.userId?._id?.toString() === mongoUser?._id?.toString() || s.userId?.toString() === mongoUser?._id?.toString()) && s.status === 'Completed');
                  
                  if (myCompleted) {
                    return (
-                     <div className="mb-4">
-                       <span className="text-xs font-semibold text-gray-400 block mb-1.5">বাজার স্ট্যাটাস</span>
-                       <div className="bg-emerald-50 text-emerald-700 font-bold px-4 py-3.5 rounded-xl text-sm flex items-center gap-2">
-                         <CheckCircle2 className="w-4 h-4" /> 
-                         এই মাসের বাজার সম্পন্ন হয়েছে!
+                     <div className="mb-4 space-y-2">
+                       <div>
+                         <span className="text-xs font-semibold text-gray-400 block mb-1.5">আপনার বাজার তারিখ (সম্পন্ন)</span>
+                         <div className="bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-900 font-bold px-4 py-3.5 rounded-xl text-sm line-through opacity-85">
+                           {formatSafeDate(myCompleted.fromDate)} 
+                           {' - '} 
+                           {formatSafeDate(myCompleted.toDate)}
+                         </div>
+                       </div>
+                       <div className="bg-emerald-50/80 text-emerald-700 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 border border-emerald-100">
+                         <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> 
+                         বাজার দায়িত্ব সম্পন্ন হয়েছে!
                        </div>
                      </div>
                    );
@@ -2000,55 +2066,102 @@ export default function Home() {
                      from.setHours(0,0,0,0);
                      const to = new Date(s.toDate);
                      to.setHours(23,59,59,999);
-                     return today >= from && today <= to && s.status === 'Approved';
+                     return today >= from && today <= to && (s.status === 'Approved' || s.status === 'Completed');
                    });
                  };
                  const todayBazaar = getTodayBazaarInCharge();
 
-                 if (todayBazaar) {
-                   return (
-                     <div className="space-y-3">
-                       <div className="flex items-center gap-3 bg-rose-50/50 p-3.5 rounded-2xl border border-rose-100/50">
-                         <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-750 flex items-center justify-center font-bold flex-shrink-0">
-                           {(todayBazaar.userId?.name?.charAt(0) || 'U').toUpperCase()}
+                 const isCompleted = todayBazaar?.status === 'Completed';
+
+                 return (
+                   <div className="space-y-4">
+                     {/* In-Charge Section */}
+                     {todayBazaar ? (
+                       <div className="flex items-center justify-between bg-rose-50/50 p-3.5 rounded-2xl border border-rose-100/50">
+                         <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-750 flex items-center justify-center font-bold flex-shrink-0">
+                             {(todayBazaar.userId?.name?.charAt(0) || 'U').toUpperCase()}
+                           </div>
+                           <div>
+                             <p className="font-extrabold text-sm text-gray-900 capitalize">{todayBazaar.userId?.name || 'অজানা মেম্বার'}</p>
+                             <p className="text-[10px] font-bold text-gray-400">আজকের দায়িত্বপ্রাপ্ত বাজারকারী</p>
+                           </div>
                          </div>
-                         <div>
-                           <p className="font-extrabold text-sm text-gray-900 capitalize">{todayBazaar.userId?.name}</p>
-                           <p className="text-[10px] font-bold text-gray-400">মেস মেম্বার (আজকের বাজার কারিগর)</p>
-                         </div>
+                         <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-750 animate-pulse'}`}>
+                           {isCompleted ? 'সম্পন্ন' : 'চলতি'}
+                         </span>
                        </div>
-                       
-                       {/* Checklist suggestions */}
-                       <div className="bg-gray-50/80 p-3.5 rounded-2xl space-y-2">
-                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">বাজারের চেকলিস্ট (Suggestions):</p>
-                         <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-gray-600">
-                           <label className="flex items-center gap-1.5 cursor-pointer">
-                             <input type="checkbox" defaultChecked className="rounded border-gray-300 text-rose-600 focus:ring-rose-500" />
-                             <span>চাল ও তেল</span>
-                           </label>
-                           <label className="flex items-center gap-1.5 cursor-pointer">
-                             <input type="checkbox" className="rounded border-gray-300 text-rose-600 focus:ring-rose-500" />
-                             <span>মাছ / মাংস</span>
-                           </label>
-                           <label className="flex items-center gap-1.5 cursor-pointer">
-                             <input type="checkbox" className="rounded border-gray-300 text-rose-600 focus:ring-rose-500" />
-                             <span>তরকারি ও সবজি</span>
-                           </label>
-                           <label className="flex items-center gap-1.5 cursor-pointer">
-                             <input type="checkbox" className="rounded border-gray-300 text-rose-600 focus:ring-rose-500" />
-                             <span>মশলা ও পেঁয়াজ</span>
-                           </label>
-                         </div>
+                     ) : (
+                       <div className="text-center py-3 text-gray-400 text-[10px] font-bold bg-gray-50 rounded-2xl border border-gray-100/50">
+                         আজকে বাজার করার জন্য কারো দায়িত্ব নেই।
+                       </div>
+                     )}
+
+                     {/* Checklist Section */}
+                     <div className="space-y-3 pt-3 border-t border-gray-50">
+                       <div className="flex items-center justify-between">
+                         <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">বাজারের ফর্দ / চেকলিস্ট:</p>
+                         <span className="text-[9px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded font-black">
+                           {bazaarChecklist.filter(x => x.isCompleted).length}/{bazaarChecklist.length} সম্পন্ন
+                         </span>
+                       </div>
+
+                       {/* Add Item Form (Only for Admins/Managers) */}
+                       {isManagerOrAdmin && (
+                         <form onSubmit={handleAddChecklistItem} className="flex gap-2">
+                           <input
+                             type="text"
+                             required
+                             value={newChecklistItem}
+                             onChange={(e) => setNewChecklistItem(e.target.value)}
+                             placeholder="যেমন: আলু ৫ কেজি"
+                             className="flex-1 px-3 py-2 bg-gray-50 border border-gray-150 rounded-xl text-xs font-bold text-gray-955 focus:outline-none focus:border-rose-350 focus:bg-white transition-all outline-none"
+                           />
+                           <button
+                             type="submit"
+                             disabled={checklistSubmitLoading}
+                             className="px-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md disabled:opacity-50"
+                           >
+                             {checklistSubmitLoading ? '...' : 'যোগ'}
+                           </button>
+                         </form>
+                       )}
+
+                       {/* Checklist Items */}
+                       <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                         {bazaarChecklist.length === 0 ? (
+                           <p className="text-gray-400 text-center py-4 text-xs font-bold bg-gray-50 rounded-2xl border border-gray-100/50">আজকের বাজারের কোনো ফর্দ দেওয়া হয়নি।</p>
+                         ) : (
+                           bazaarChecklist.map((item) => (
+                             <div key={item._id} className="flex items-center justify-between p-2.5 bg-gray-50/50 border border-gray-100 rounded-xl hover:bg-gray-50 transition-all text-xs font-bold group">
+                               <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                                 <input 
+                                   type="checkbox"
+                                   checked={item.isCompleted}
+                                   onChange={() => handleToggleChecklistItem(item._id, item.isCompleted)}
+                                   className="rounded border-gray-300 text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+                                 />
+                                 <span className={cn("text-gray-800 capitalize truncate", item.isCompleted && "line-through text-gray-400")}>
+                                   {item.item}
+                                 </span>
+                               </label>
+                               
+                               {isManagerOrAdmin && (
+                                 <button
+                                   type="button"
+                                   onClick={() => handleDeleteChecklistItem(item._id)}
+                                   className="text-rose-500 hover:text-rose-700 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1"
+                                 >
+                                   <Trash2 className="w-3.5 h-3.5" />
+                                 </button>
+                                )}
+                             </div>
+                           ))
+                         )}
                        </div>
                      </div>
-                   );
-                 } else {
-                   return (
-                     <div className="text-center py-6 text-gray-400 text-xs font-bold bg-gray-50 rounded-2xl border border-gray-100/50">
-                       আজকে বাজার করার জন্য কারো দায়িত্ব নেই।
-                     </div>
-                   );
-                 }
+                   </div>
+                 );
                })()}
              </div>
           </div>
