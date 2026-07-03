@@ -70,6 +70,17 @@ export async function addExpense(monthId: string, userId: string | null, type: '
   try {
     await connectToDatabase();
     
+    // For Joint (shared) expenses: always snapshot exactly which members share this cost.
+    // If no sharedBetween list is provided, it means "all current active members".
+    // We snapshot them NOW so future new members don't inherit this old cost unfairly.
+    let resolvedSharedBetween = sharedBetween;
+    if (type === 'Joint') {
+      if (!resolvedSharedBetween || resolvedSharedBetween.length === 0) {
+        const allActiveUsers = await User.find({ role: { $ne: 'Pending' } }).select('_id');
+        resolvedSharedBetween = allActiveUsers.map((u: any) => u._id.toString());
+      }
+    }
+
     const expense = await Expense.create({
       monthId,
       userId: userId || null,
@@ -77,7 +88,7 @@ export async function addExpense(monthId: string, userId: string | null, type: '
       amount,
       description,
       date: new Date(date).setHours(0,0,0,0),
-      sharedBetween
+      sharedBetween: resolvedSharedBetween
     });
 
     const month = await Month.findById(monthId);
@@ -191,6 +202,7 @@ export async function deleteExpense(id: string) {
 
     await createNotification("খরচ ডিলিট", `${memberName}-এর একটি খরচের রেকর্ড ডিলিট করা হয়েছে।`);
 
+    revalidatePath('/', 'layout');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -273,6 +285,7 @@ export async function updateExpense(id: string, amount: number, description: str
     }
     await createNotification("খরচ আপডেট", `${memberName}-এর একটি খরচের পরিমাণ আপডেট করে ${amount} টাকা করা হয়েছে।`);
 
+    revalidatePath('/', 'layout');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -626,16 +639,37 @@ export async function removeMember(adminUserId: string, memberId: string) {
     // Check if member has active records in the running month
     const meals = await Meal.find({ monthId: activeMonth._id, userId: memberId });
     const deposits = await Deposit.find({ monthId: activeMonth._id, userId: memberId });
-    const expenses = await Expense.find({ monthId: activeMonth._id, userId: memberId, type: 'Single' });
+    const singleExpenses = await Expense.find({ monthId: activeMonth._id, userId: memberId, type: 'Single' });
+
+    // Check if member is part of any Joint (shared) expense in this month
+    const allExpenses = await Expense.find({ monthId: activeMonth._id });
+    const users = await User.find({ role: { $ne: 'Pending' } });
+    const numUsers = users.length;
+
+    const userJointExpenses = allExpenses.filter(e => {
+      if (e.type !== 'Joint') return false;
+      if (!e.sharedBetween || e.sharedBetween.length === 0) return true;
+      return e.sharedBetween.some((id: any) => id?.toString() === memberId.toString());
+    });
+
+    const jointCost = userJointExpenses.reduce((sum, e) => {
+      const count = (!e.sharedBetween || e.sharedBetween.length === 0) ? numUsers : e.sharedBetween.length;
+      return sum + (e.amount / count);
+    }, 0);
 
     const totalMeals = meals.reduce((sum, m) => sum + m.mealCount, 0);
     const totalDeposit = deposits.reduce((sum, d) => sum + d.amount, 0);
-    const singleCost = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const singleCost = singleExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-    if (totalMeals > 0 || totalDeposit > 0 || singleCost > 0) {
+    if (totalMeals > 0 || totalDeposit > 0 || singleCost > 0 || jointCost > 0) {
+      const reasons = [];
+      if (totalMeals > 0) reasons.push(`মিল (${totalMeals}টি)`);
+      if (totalDeposit > 0) reasons.push(`জমা (${totalDeposit}৳)`);
+      if (singleCost > 0) reasons.push(`একক খরচ (${singleCost}৳)`);
+      if (jointCost > 0) reasons.push(`যৌথ খরচ (${jointCost.toFixed(2)}৳)`);
       return { 
         success: false, 
-        error: 'এই মেম্বারকে রিমুভ করা সম্ভব নয়। চলমান মাসে তার নামে মিল, জমা বা একক খরচ যুক্ত আছে। মেম্বার ডিলিট করতে হলে সব রেকর্ড ০ (শূন্য) হতে হবে।' 
+        error: `এই মেম্বারকে রিমুভ করা সম্ভব নয়। চলমান মাসে তার রেকর্ড রয়েছে — ${reasons.join(', ')}। মেম্বার ডিলিট করতে হলে সব রেকর্ড ০ (শূন্য) হতে হবে।` 
       };
     }
 
@@ -647,6 +681,7 @@ export async function removeMember(adminUserId: string, memberId: string) {
       m.createNotification('মেম্বার ডিলিট', `অ্যাডমিন একজন মেম্বারকে মেস থেকে রিমুভ করেছেন।`)
     );
 
+    revalidatePath('/', 'layout');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
