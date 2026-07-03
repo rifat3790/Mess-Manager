@@ -133,6 +133,7 @@ export default function Home() {
   const [bazaarChecklist, setBazaarChecklist] = useState<any[]>([]);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [checklistSubmitLoading, setChecklistSubmitLoading] = useState(false);
+  const [chartType, setChartType] = useState<'my' | 'global'>('my');
 
   const formatSafeDate = (dateVal: any, formatOpts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' }) => {
     if (!dateVal) return 'অজানা তারিখ';
@@ -209,6 +210,19 @@ export default function Home() {
       }
 
       if (res.success) {
+        try {
+          const currentCache = JSON.parse(localStorage.getItem('mess_dashboard_cache_v2') || '{}');
+          localStorage.setItem('mess_dashboard_cache_v2', JSON.stringify({
+            ...currentCache,
+            globalStats: res.stats,
+            myStats: (res.members && res.members.find((m) => m._id === mongoUser._id)) || { totalMeal: 0, deposit: 0, totalCost: 0, balance: 0 },
+            allMembers: res.members || [],
+            bazaarSchedules: scheduleRes.schedules || [],
+            notifications: notificationRes.notifications || [],
+            contacts: contactsRes.contacts || [],
+            bazaarChecklist: checklistRes.items || []
+          }));
+        } catch (e) {}
         if (res.stats) {
           setGlobalStats(res.stats);
           setCustomMealRate(res.stats.mealRate ? res.stats.mealRate.toFixed(2) : '40.00');
@@ -287,6 +301,14 @@ export default function Home() {
       if (noticesRes.success) {
         setNotices(noticesRes.notices || []);
       }
+      try {
+        const currentCache = JSON.parse(localStorage.getItem('mess_dashboard_cache_v2') || '{}');
+        localStorage.setItem('mess_dashboard_cache_v2', JSON.stringify({
+          ...currentCache,
+          menu: menuRes.menu || null,
+          notices: noticesRes.notices || []
+        }));
+      } catch (e) {}
       if (ratingsRes.success) {
         setMenuAverages(ratingsRes.averages || { breakfast: 0, lunch: 0, dinner: 0, totalCount: 0 });
         setAllMenuRatings(ratingsRes.allRatings || []);
@@ -300,6 +322,31 @@ export default function Home() {
   }
 
   useEffect(() => {
+    // Stale-While-Revalidate Caching for instant load times (0ms perceived load)
+    try {
+      const cached = localStorage.getItem('mess_dashboard_cache_v2');
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.globalStats) setGlobalStats(data.globalStats);
+        if (data.myStats) setMyStats(data.myStats);
+        if (data.allMembers) setAllMembers(data.allMembers);
+        if (data.bazaarSchedules) setBazaarSchedules(data.bazaarSchedules);
+        if (data.notifications) setNotifications(data.notifications);
+        if (data.contacts) setContacts(data.contacts);
+        if (data.bazaarChecklist) setBazaarChecklist(data.bazaarChecklist);
+        if (data.menu) {
+          setMenu(data.menu);
+          setMenuBreakfast(data.menu.breakfast || '');
+          setMenuLunch(data.menu.lunch || '');
+          setMenuDinner(data.menu.dinner || '');
+        }
+        if (data.notices) setNotices(data.notices);
+        setDataLoading(false);
+      }
+    } catch (e) {
+      console.warn("Failed to load stale cache:", e);
+    }
+
     fetchDashboardData();
     fetchUserMeals();
     fetchPendingRequests();
@@ -1012,6 +1059,179 @@ export default function Home() {
                   </div>
               </div>
             </div>
+          </div>
+
+          {/* Visual Cost & Expense Analytics Card */}
+          <div suppressHydrationWarning className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] rounded-3xl p-6 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-6 border-b border-gray-50 pb-3">
+              <div className="flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-indigo-500" />
+                <h3 className="font-extrabold text-gray-900 text-base">খরচের চিত্র ও বিশ্লেষণ (Visual Expense Analytics)</h3>
+              </div>
+              <div className="flex bg-gray-100 p-0.5 rounded-xl text-[10px] font-black">
+                <button
+                  onClick={() => setChartType('my')}
+                  className={cn("px-3 py-1.5 rounded-lg transition-all", chartType === 'my' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-900")}
+                >
+                  আমার খরচ
+                </button>
+                <button
+                  onClick={() => setChartType('global')}
+                  className={cn("px-3 py-1.5 rounded-lg transition-all", chartType === 'global' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-900")}
+                >
+                  মেসের মোট খরচ
+                </button>
+              </div>
+            </div>
+
+            {(() => {
+              const mealRate = globalStats?.mealRate || 0;
+              const meal = chartType === 'my' ? ((myStats?.totalMeal || 0) * mealRate) : (globalStats?.mealExpenses || 0);
+              const joint = chartType === 'my' ? (myStats?.jointCost || 0) : (globalStats?.jointExpenses || 0);
+              const single = chartType === 'my' ? (myStats?.singleCost || 0) : (globalStats?.singleExpenses || 0);
+              const total = meal + joint + single;
+
+              const mealPct = total > 0 ? (meal / total) * 100 : 0;
+              const jointPct = total > 0 ? (joint / total) * 100 : 0;
+              const singlePct = total > 0 ? (single / total) * 100 : 0;
+
+              const radius = 36;
+              const circ = 2 * Math.PI * radius; // 226.19
+              
+              const mealOffset = 0;
+              const jointOffset = -((mealPct / 100) * circ);
+              const singleOffset = -(((mealPct + jointPct) / 100) * circ);
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                  {/* Left: Donut Chart */}
+                  <div className="flex justify-center relative">
+                    <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 100 100">
+                      {/* Background circle */}
+                      <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#f3f4f6" strokeWidth="8" />
+                      
+                      {/* Meal Cost segment */}
+                      {mealPct > 0 && (
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={radius}
+                          fill="transparent"
+                          stroke="url(#mealGrad)"
+                          strokeWidth="9"
+                          strokeDasharray={`${(mealPct / 100) * circ} ${circ}`}
+                          strokeDashoffset={mealOffset}
+                          strokeLinecap="round"
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+
+                      {/* Joint Cost segment */}
+                      {jointPct > 0 && (
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={radius}
+                          fill="transparent"
+                          stroke="url(#jointGrad)"
+                          strokeWidth="9"
+                          strokeDasharray={`${(jointPct / 100) * circ} ${circ}`}
+                          strokeDashoffset={jointOffset}
+                          strokeLinecap="round"
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+
+                      {/* Single Cost segment */}
+                      {singlePct > 0 && (
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={radius}
+                          fill="transparent"
+                          stroke="url(#singleGrad)"
+                          strokeWidth="9"
+                          strokeDasharray={`${(singlePct / 100) * circ} ${circ}`}
+                          strokeDashoffset={singleOffset}
+                          strokeLinecap="round"
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+
+                      {/* Gradients */}
+                      <defs>
+                        <linearGradient id="mealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#3b82f6" />
+                          <stop offset="100%" stopColor="#1d4ed8" />
+                        </linearGradient>
+                        <linearGradient id="jointGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#10b981" />
+                          <stop offset="100%" stopColor="#047857" />
+                        </linearGradient>
+                        <linearGradient id="singleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#f43f5e" />
+                          <stop offset="100%" stopColor="#be123c" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+
+                    {/* Centered Total Text */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <p className="text-lg font-black text-gray-900">{total.toFixed(0)} ৳</p>
+                      <p className="text-[9px] font-bold text-gray-400">মোট খরচ</p>
+                    </div>
+                  </div>
+
+                  {/* Right: Legend & Interactive Breakdown */}
+                  <div className="space-y-3">
+                    {/* Meal Cost Legend Row */}
+                    <div className="flex items-center justify-between p-3 bg-blue-50/20 border border-blue-50/50 rounded-2xl">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm shadow-blue-300"></span>
+                        <div>
+                          <p className="text-xs font-black text-gray-800">খাবারের খরচ</p>
+                          <p className="text-[8px] font-bold text-gray-400">মিলের মোট ব্যয়</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-blue-600">{meal.toFixed(0)} ৳</p>
+                        <p className="text-[8px] font-extrabold text-blue-500">{mealPct.toFixed(1)}%</p>
+                      </div>
+                    </div>
+
+                    {/* Joint Cost Legend Row */}
+                    <div className="flex items-center justify-between p-3 bg-emerald-50/20 border border-emerald-50/50 rounded-2xl">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-300"></span>
+                        <div>
+                          <p className="text-xs font-black text-gray-800">যৌথ খরচ</p>
+                          <p className="text-[8px] font-bold text-gray-400">শেয়ার্ড খরচ অংশ</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-emerald-600">{joint.toFixed(0)} ৳</p>
+                        <p className="text-[8px] font-extrabold text-emerald-500">{jointPct.toFixed(1)}%</p>
+                      </div>
+                    </div>
+
+                    {/* Single Cost Legend Row */}
+                    <div className="flex items-center justify-between p-3 bg-rose-50/20 border border-rose-50/50 rounded-2xl">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm shadow-rose-300"></span>
+                        <div>
+                          <p className="text-xs font-black text-gray-800">একক খরচ</p>
+                          <p className="text-[8px] font-bold text-gray-400">ব্যক্তিগত খরচ অংশ</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-rose-600">{single.toFixed(0)} ৳</p>
+                        <p className="text-[8px] font-extrabold text-rose-500">{singlePct.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Today's Cooking Menu Widget (Unique and Mess-Related Feature) */}
