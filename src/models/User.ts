@@ -7,6 +7,13 @@ export interface IUser extends Document {
   role: 'Super Admin' | 'Manager' | 'Member' | 'Pending';
   photoURL?: string;
   lastGroupChatRead?: Date;
+  permissions?: {
+    canManageMeals: boolean;
+    canManageExpenses: boolean;
+    canManageDeposits: boolean;
+    canManageNotices: boolean;
+    canManageBazaar: boolean;
+  };
   createdAt: Date;
 }
 
@@ -17,6 +24,13 @@ const UserSchema: Schema = new Schema({
   role: { type: String, enum: ['Super Admin', 'Manager', 'Member', 'Pending'], default: 'Pending' },
   photoURL: { type: String },
   lastGroupChatRead: { type: Date, default: Date.now },
+  permissions: {
+    canManageMeals: { type: Boolean, default: false },
+    canManageExpenses: { type: Boolean, default: false },
+    canManageDeposits: { type: Boolean, default: false },
+    canManageNotices: { type: Boolean, default: false },
+    canManageBazaar: { type: Boolean, default: false }
+  },
   createdAt: { type: Date, default: Date.now },
 });
 

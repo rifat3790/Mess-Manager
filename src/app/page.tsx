@@ -178,6 +178,11 @@ export default function Home() {
   const { spentPercentage, healthStatus, healthColor, progressColor } = budgetHealth;
 
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
+  const canManageMeals = isManagerOrAdmin || mongoUser?.permissions?.canManageMeals;
+  const canManageExpenses = isManagerOrAdmin || mongoUser?.permissions?.canManageExpenses;
+  const canManageDeposits = isManagerOrAdmin || mongoUser?.permissions?.canManageDeposits;
+  const canManageNotices = isManagerOrAdmin || mongoUser?.permissions?.canManageNotices;
+  const canManageBazaar = isManagerOrAdmin || mongoUser?.permissions?.canManageBazaar;
 
   async function fetchDashboardData() {
     if (!user || !mongoUser || mongoUser.role === 'Pending') {
@@ -278,7 +283,7 @@ export default function Home() {
   }
 
   async function fetchPendingRequests() {
-    if (mongoUser && isManagerOrAdmin) {
+    if (mongoUser && canManageMeals) {
       const res = await getPendingMealRequests();
       if (res.success) {
         setPendingRequests(res.requests || []);
@@ -1285,7 +1290,7 @@ export default function Home() {
                 <h3 className="font-extrabold text-gray-900 text-lg">আজকের রান্নার মেনু (Cooking Menu)</h3>
               </div>
               <div className="flex gap-2">
-                {isManagerOrAdmin && allMenuRatings.length > 0 && (
+                {canManageMeals && allMenuRatings.length > 0 && (
                   <button
                     onClick={() => setShowRatingsDetailModal(true)}
                     className="text-[10px] font-extrabold text-amber-600 bg-amber-50 px-2.5 py-1.5 rounded-xl hover:bg-amber-100 transition-colors flex items-center gap-1"
@@ -1293,7 +1298,7 @@ export default function Home() {
                     ⭐ রিভিউ বিবরণী ({menuAverages.totalCount} জন)
                   </button>
                 )}
-                {isManagerOrAdmin && !isEditingMenu && (
+                {canManageMeals && !isEditingMenu && (
                   <button
                     onClick={() => setIsEditingMenu(true)}
                     className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl hover:bg-indigo-100 transition-colors"
@@ -1486,11 +1491,11 @@ export default function Home() {
                   আজ ও আগামীকালের মিল প্ল্যানার
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {isManagerOrAdmin ? 'মিল সরাসরি আপডেট করুন' : 'মিলের পরিবর্তন অনুরোধ জানান'}
+                  {canManageMeals ? 'মিল সরাসরি আপডেট করুন' : 'মিলের পরিবর্তন অনুরোধ জানান'}
                 </p>
               </div>
               <span className="text-xs bg-orange-50 text-orange-600 px-3 py-1 rounded-full font-bold">
-                {isManagerOrAdmin ? 'অ্যাডমিন প্যানেল' : 'রিকোয়েস্ট প্যানেল'}
+                {canManageMeals ? 'অ্যাডমিন প্যানেল' : 'রিকোয়েস্ট প্যানেল'}
               </span>
             </div>
 
@@ -1522,7 +1527,7 @@ export default function Home() {
                         <div className="flex items-center gap-3">
                           <button 
                             disabled={mealLoading['today-breakfast'] || mealLoading['today-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('today', 'breakfast', -0.5) 
                               : handleDraftMealChange('today', 'breakfast', -0.5)
                             }
@@ -1534,12 +1539,12 @@ export default function Home() {
                             <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
                           ) : (
                             <span className="text-sm font-black text-gray-900 w-6 text-center">
-                              {isManagerOrAdmin ? (myMeals.today.breakfast || 0) : (draftMeals.today.breakfast || 0)}
+                              {canManageMeals ? (myMeals.today.breakfast || 0) : (draftMeals.today.breakfast || 0)}
                             </span>
                           )}
                           <button 
                             disabled={mealLoading['today-breakfast'] || mealLoading['today-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('today', 'breakfast', 0.5) 
                               : handleDraftMealChange('today', 'breakfast', 0.5)
                             }
@@ -1556,7 +1561,7 @@ export default function Home() {
                         <div className="flex items-center gap-3">
                           <button 
                             disabled={mealLoading['today-lunch'] || mealLoading['today-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('today', 'lunch', -0.5) 
                               : handleDraftMealChange('today', 'lunch', -0.5)
                             }
@@ -1568,12 +1573,12 @@ export default function Home() {
                             <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
                           ) : (
                             <span className="text-sm font-black text-gray-900 w-6 text-center">
-                              {isManagerOrAdmin ? (myMeals.today.lunch || 0) : (draftMeals.today.lunch || 0)}
+                              {canManageMeals ? (myMeals.today.lunch || 0) : (draftMeals.today.lunch || 0)}
                             </span>
                           )}
                           <button 
                             disabled={mealLoading['today-lunch'] || mealLoading['today-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('today', 'lunch', 0.5) 
                               : handleDraftMealChange('today', 'lunch', 0.5)
                             }
@@ -1590,7 +1595,7 @@ export default function Home() {
                         <div className="flex items-center gap-3">
                           <button 
                             disabled={mealLoading['today-dinner'] || mealLoading['today-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('today', 'dinner', -0.5) 
                               : handleDraftMealChange('today', 'dinner', -0.5)
                             }
@@ -1602,12 +1607,12 @@ export default function Home() {
                             <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
                           ) : (
                             <span className="text-sm font-black text-gray-900 w-6 text-center">
-                              {isManagerOrAdmin ? (myMeals.today.dinner || 0) : (draftMeals.today.dinner || 0)}
+                              {canManageMeals ? (myMeals.today.dinner || 0) : (draftMeals.today.dinner || 0)}
                             </span>
                           )}
                           <button 
                             disabled={mealLoading['today-dinner'] || mealLoading['today-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('today', 'dinner', 0.5) 
                               : handleDraftMealChange('today', 'dinner', 0.5)
                             }
@@ -1619,7 +1624,7 @@ export default function Home() {
                       </div>
 
                       {/* Show current actual meal count for standard member */}
-                      {!isManagerOrAdmin && (
+                      {!canManageMeals && (
                         <div className="mt-3 text-[11px] font-bold text-gray-500 bg-white p-2.5 rounded-xl flex justify-between items-center shadow-[0_4px_20px_rgb(0,0,0,0.01)]">
                           <span>বর্তমান মিল:</span>
                           <span className="text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-md">
@@ -1628,7 +1633,7 @@ export default function Home() {
                         </div>
                       )}
                       {/* Show pending request if exists */}
-                      {!isManagerOrAdmin && myMeals.pendingToday && (
+                      {!canManageMeals && myMeals.pendingToday && (
                         <div className="mt-2 text-[11px] font-extrabold text-amber-700 bg-amber-50 p-2.5 rounded-xl flex justify-between items-center animate-pulse">
                           <span>পেন্ডিং অনুরোধ:</span>
                           <span>
@@ -1640,7 +1645,7 @@ export default function Home() {
                   </div>
 
                   {/* Standard member send request button */}
-                  {!isManagerOrAdmin && hasChanges('today') && (
+                  {!canManageMeals && hasChanges('today') && (
                     <button
                       onClick={() => handleSendMealRequest('today')}
                       disabled={mealLoading['today-request']}
@@ -1681,7 +1686,7 @@ export default function Home() {
                         <div className="flex items-center gap-3">
                           <button 
                             disabled={mealLoading['tomorrow-breakfast'] || mealLoading['tomorrow-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('tomorrow', 'breakfast', -0.5) 
                               : handleDraftMealChange('tomorrow', 'breakfast', -0.5)
                             }
@@ -1693,12 +1698,12 @@ export default function Home() {
                             <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
                           ) : (
                             <span className="text-sm font-black text-gray-900 w-6 text-center">
-                              {isManagerOrAdmin ? (myMeals.tomorrow.breakfast || 0) : (draftMeals.tomorrow.breakfast || 0)}
+                              {canManageMeals ? (myMeals.tomorrow.breakfast || 0) : (draftMeals.tomorrow.breakfast || 0)}
                             </span>
                           )}
                           <button 
                             disabled={mealLoading['tomorrow-breakfast'] || mealLoading['tomorrow-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('tomorrow', 'breakfast', 0.5) 
                               : handleDraftMealChange('tomorrow', 'breakfast', 0.5)
                             }
@@ -1715,7 +1720,7 @@ export default function Home() {
                         <div className="flex items-center gap-3">
                           <button 
                             disabled={mealLoading['tomorrow-lunch'] || mealLoading['tomorrow-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('tomorrow', 'lunch', -0.5) 
                               : handleDraftMealChange('tomorrow', 'lunch', -0.5)
                             }
@@ -1727,12 +1732,12 @@ export default function Home() {
                             <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
                           ) : (
                             <span className="text-sm font-black text-gray-900 w-6 text-center">
-                              {isManagerOrAdmin ? (myMeals.tomorrow.lunch || 0) : (draftMeals.tomorrow.lunch || 0)}
+                              {canManageMeals ? (myMeals.tomorrow.lunch || 0) : (draftMeals.tomorrow.lunch || 0)}
                             </span>
                           )}
                           <button 
                             disabled={mealLoading['tomorrow-lunch'] || mealLoading['tomorrow-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('tomorrow', 'lunch', 0.5) 
                               : handleDraftMealChange('tomorrow', 'lunch', 0.5)
                             }
@@ -1749,7 +1754,7 @@ export default function Home() {
                         <div className="flex items-center gap-3">
                           <button 
                             disabled={mealLoading['tomorrow-dinner'] || mealLoading['tomorrow-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('tomorrow', 'dinner', -0.5) 
                               : handleDraftMealChange('tomorrow', 'dinner', -0.5)
                             }
@@ -1761,12 +1766,12 @@ export default function Home() {
                             <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
                           ) : (
                             <span className="text-sm font-black text-gray-900 w-6 text-center">
-                              {isManagerOrAdmin ? (myMeals.tomorrow.dinner || 0) : (draftMeals.tomorrow.dinner || 0)}
+                              {canManageMeals ? (myMeals.tomorrow.dinner || 0) : (draftMeals.tomorrow.dinner || 0)}
                             </span>
                           )}
                           <button 
                             disabled={mealLoading['tomorrow-dinner'] || mealLoading['tomorrow-request']}
-                            onClick={() => isManagerOrAdmin 
+                            onClick={() => canManageMeals 
                               ? handleDirectMealChange('tomorrow', 'dinner', 0.5) 
                               : handleDraftMealChange('tomorrow', 'dinner', 0.5)
                             }
@@ -1778,7 +1783,7 @@ export default function Home() {
                       </div>
 
                       {/* Show current actual meal count for standard member */}
-                      {!isManagerOrAdmin && (
+                      {!canManageMeals && (
                         <div className="mt-3 text-[11px] font-bold text-gray-500 bg-white p-2.5 rounded-xl flex justify-between items-center shadow-[0_4px_20px_rgb(0,0,0,0.01)]">
                           <span>বর্তমান মিল:</span>
                           <span className="text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-md">
@@ -1787,7 +1792,7 @@ export default function Home() {
                         </div>
                       )}
                       {/* Show pending request if exists */}
-                      {!isManagerOrAdmin && myMeals.pendingTomorrow && (
+                      {!canManageMeals && myMeals.pendingTomorrow && (
                         <div className="mt-2 text-[11px] font-extrabold text-amber-700 bg-amber-50 p-2.5 rounded-xl flex justify-between items-center animate-pulse">
                           <span>পেন্ডিং অনুরোধ:</span>
                           <span>
@@ -1799,7 +1804,7 @@ export default function Home() {
                   </div>
 
                   {/* Standard member send request button */}
-                  {!isManagerOrAdmin && hasChanges('tomorrow') && (
+                  {!canManageMeals && hasChanges('tomorrow') && (
                     <button
                       onClick={() => handleSendMealRequest('tomorrow')}
                       disabled={mealLoading['tomorrow-request']}
@@ -1933,7 +1938,7 @@ export default function Home() {
           </div>
 
           {/* Pending Meal Requests Panel (Only visible to Managers/Admins) */}
-          {isManagerOrAdmin && pendingRequests.length > 0 && (
+          {canManageMeals && pendingRequests.length > 0 && (
             <div suppressHydrationWarning className="bg-white shadow-[0_8px_30px_rgb(245,158,11,0.04)] rounded-3xl p-6 relative overflow-hidden">
               <div className="flex items-center gap-2 mb-4 border-b border-amber-50 pb-3">
                 <Crown className="w-5 h-5 text-amber-500" />
@@ -2267,7 +2272,7 @@ export default function Home() {
                })()}
                
                <div className="mt-4 pt-4 border-t border-gray-100">
-                 {isManagerOrAdmin ? (
+                 {canManageMeals ? (
                    <button 
                      onClick={() => router.push('/bazaar')}
                      className="w-full py-3 bg-gray-900 hover:bg-gray-950 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 text-sm shadow-md"
@@ -2370,7 +2375,7 @@ export default function Home() {
                        </div>
 
                        {/* Add Item Form (Only for Admins/Managers) */}
-                       {isManagerOrAdmin && (
+                       {canManageBazaar && (
                          <form onSubmit={handleAddChecklistItem} className="flex gap-2">
                            <input
                              type="text"
@@ -2409,10 +2414,10 @@ export default function Home() {
                                  </span>
                                </label>
                                
-                               {isManagerOrAdmin && (
-                                 <button
-                                   type="button"
-                                   onClick={() => handleDeleteChecklistItem(item._id)}
+                               {canManageBazaar && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteChecklistItem(item._id)}
                                    className="text-rose-500 hover:text-rose-700 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1"
                                  >
                                    <Trash2 className="w-3.5 h-3.5" />

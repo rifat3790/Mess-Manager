@@ -181,3 +181,35 @@ export async function deleteContact(requesterId: string, contactId: string) {
   }
 }
 
+export async function updateUserPermissions(
+  requesterId: string,
+  targetUserId: string,
+  permissions: {
+    canManageMeals: boolean;
+    canManageExpenses: boolean;
+    canManageDeposits: boolean;
+    canManageNotices: boolean;
+    canManageBazaar: boolean;
+  }
+) {
+  try {
+    await connectToDatabase();
+    
+    // Authorization check
+    const requester = await User.findById(requesterId);
+    if (!requester || (requester.role !== 'Super Admin' && requester.role !== 'Manager')) {
+      return { success: false, error: 'অনুমতি নেই!' };
+    }
+    
+    const updated = await User.findByIdAndUpdate(
+      targetUserId,
+      { permissions },
+      { new: true }
+    );
+    
+    return { success: true, user: JSON.parse(JSON.stringify(updated)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+

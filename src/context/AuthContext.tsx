@@ -9,6 +9,13 @@ export interface MongoUser {
   name: string;
   email: string;
   role: 'Super Admin' | 'Manager' | 'Member' | 'Pending';
+  permissions?: {
+    canManageMeals: boolean;
+    canManageExpenses: boolean;
+    canManageDeposits: boolean;
+    canManageNotices: boolean;
+    canManageBazaar: boolean;
+  };
 }
 
 interface AuthContextType {

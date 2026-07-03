@@ -147,7 +147,8 @@ export default function ExpensePage() {
     }
   };
 
-  if (mongoUser?.role !== 'Super Admin' && mongoUser?.role !== 'Manager') {
+  const canManage = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager' || mongoUser?.permissions?.canManageExpenses;
+  if (!canManage) {
     return <div className="p-6 text-center text-red-500 font-bold">আপনার এই পেজটি দেখার পারমিশন নেই।</div>;
   }
 

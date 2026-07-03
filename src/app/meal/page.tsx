@@ -97,7 +97,8 @@ export default function MealPage() {
     toast.success("সব রিসেট করা হয়েছে।");
   };
 
-  if (mongoUser?.role !== 'Super Admin' && mongoUser?.role !== 'Manager') {
+  const canManage = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager' || mongoUser?.permissions?.canManageMeals;
+  if (!canManage) {
     return <div className="p-6 text-center text-red-500 font-bold">আপনার এই পেজটি দেখার পারমিশন নেই।</div>;
   }
 

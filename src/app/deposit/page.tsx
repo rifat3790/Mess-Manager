@@ -52,8 +52,9 @@ export default function DepositPage() {
     }
   };
 
-  if (mongoUser?.role !== 'Super Admin' && mongoUser?.role !== 'Manager') {
-    return <div className="p-6 text-center text-red-500 font-bold">You do not have permission to access this page.</div>;
+  const canManage = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager' || mongoUser?.permissions?.canManageDeposits;
+  if (!canManage) {
+    return <div className="p-6 text-center text-red-500 font-bold">আপনার এই পেজটি দেখার পারমিশন নেই।</div>;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
