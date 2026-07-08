@@ -15,13 +15,22 @@ export async function getNotifications(userId: string) {
 
     const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).lean();
     
-    const query: any = {
-      $or: [
-        { userId: new mongoose.Types.ObjectId(userId) },
-        { messId: user.messId, userId: { $exists: false } },
-        { messId: user.messId, userId: null }
-      ]
-    };
+    let query: any;
+    if (user.role === 'Super Admin') {
+      query = { userId: new mongoose.Types.ObjectId(userId) };
+    } else {
+      if (!user.messId) {
+        query = { userId: new mongoose.Types.ObjectId(userId) };
+      } else {
+        query = {
+          $or: [
+            { userId: new mongoose.Types.ObjectId(userId) },
+            { messId: user.messId, userId: { $exists: false } },
+            { messId: user.messId, userId: null }
+          ]
+        };
+      }
+    }
 
     if (activeMonth && activeMonth.startDate) {
       query.createdAt = { $gte: new Date(activeMonth.startDate) };

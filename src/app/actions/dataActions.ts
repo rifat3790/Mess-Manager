@@ -111,7 +111,7 @@ export async function addExpense(monthId: string, userId: string | null, type: '
       _id: expense._id.toString()
     });
 
-    await createNotification("নতুন খরচ যুক্ত করা হয়েছে", `${memberName}-এর ${amount} টাকার একটি নতুন খরচ (${type}) যুক্ত করা হয়েছে।`);
+    await createNotification("নতুন খরচ যুক্ত করা হয়েছে", `${memberName}-এর ${amount} টাকার একটি নতুন খরচ (${type}) যুক্ত করা হয়েছে।`, undefined, month.messId.toString());
 
     revalidatePath('/', 'layout');
     return { success: true, expense: JSON.parse(JSON.stringify(expense)) };
@@ -175,7 +175,7 @@ export async function deleteMeal(id: string) {
       }
     }
     
-    if (user) await createNotification("মিল ডিলিট", `${user.name}-এর একটি মিল রেকর্ড ডিলিট করা হয়েছে।`);
+    if (user && user.messId) await createNotification("মিল ডিলিট", `${user.name}-এর একটি মিল রেকর্ড ডিলিট করা হয়েছে।`, undefined, user.messId.toString());
 
     return { success: true };
   } catch (error: any) {
@@ -203,7 +203,7 @@ export async function deleteExpense(id: string) {
       }
     }
 
-    await createNotification("খরচ ডিলিট", `${memberName}-এর একটি খরচের রেকর্ড ডিলিট করা হয়েছে।`);
+    if (month) await createNotification("খরচ ডিলিট", `${memberName}-এর একটি খরচের রেকর্ড ডিলিট করা হয়েছে।`, undefined, month.messId.toString());
 
     revalidatePath('/', 'layout');
     return { success: true };
@@ -228,7 +228,7 @@ export async function deleteDeposit(id: string) {
       }
     }
 
-    if (user) await createNotification("জমা ডিলিট", `আপনার একটি টাকা জমার রেকর্ড ডিলিট করা হয়েছে।`, deposit.userId.toString());
+    if (user && user.messId) await createNotification("জমা ডিলিট", `আপনার একটি টাকা জমার রেকর্ড ডিলিট করা হয়েছে।`, deposit.userId.toString(), user.messId.toString());
 
     return { success: true };
   } catch (error: any) {
@@ -253,8 +253,8 @@ export async function updateMeal(id: string, mealCount: number) {
     }
     
     const user = await User.findById(meal.userId);
-    if (user) {
-      await createNotification("মিল আপডেট", `${user.name}-এর মিল সংখ্যা আপডেট করে ${mealCount} টি করা হয়েছে।`);
+    if (user && user.messId) {
+      await createNotification("মিল আপডেট", `${user.name}-এর মিল সংখ্যা আপডেট করে ${mealCount} টি করা হয়েছে।`, undefined, user.messId.toString());
     }
     
     return { success: true };

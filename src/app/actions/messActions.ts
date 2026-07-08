@@ -33,6 +33,21 @@ export async function createMess(name: string, userId: string) {
       creatorId: new mongoose.Types.ObjectId(userId),
     });
 
+    // Notify Super Admin about new mess creation
+    try {
+      const superAdmin = await User.findOne({ role: 'Super Admin' }).lean();
+      if (superAdmin) {
+        const { createNotification } = await import('./notificationActions');
+        await createNotification(
+          "নতুন মেস তৈরি হয়েছে 🏢",
+          `"${name}" নামে একটি নতুন মেস সিস্টেমে তৈরি করা হয়েছে। কোড: ${code}`,
+          superAdmin._id.toString()
+        );
+      }
+    } catch (notifErr) {
+      console.error("Error creating mess notification for super admin:", notifErr);
+    }
+
     await User.findByIdAndUpdate(userId, {
       messId: newMess._id,
       role: "Manager",

@@ -25,6 +25,21 @@ export async function POST(req: NextRequest) {
       role
     });
 
+    // Notify the Super Admin about new member registration
+    try {
+      const superAdmin = await User.findOne({ role: 'Super Admin' }).lean();
+      if (superAdmin && role !== 'Super Admin') {
+        const { createNotification } = await import('@/app/actions/notificationActions');
+        await createNotification(
+          "নতুন মেম্বার সাইন-আপ 👤",
+          `${name} (${email}) সিস্টেমে নতুন মেম্বার হিসেবে রেজিস্ট্রেশন করেছেন।`,
+          superAdmin._id.toString()
+        );
+      }
+    } catch (notifErr) {
+      console.error("Error creating registration notification for super admin:", notifErr);
+    }
+
     return NextResponse.json({ success: true, user: newUser }, { status: 201 });
   } catch (error: any) {
     console.error("Error creating user:", error);
