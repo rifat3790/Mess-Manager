@@ -64,87 +64,127 @@ export default function SingleReportPage() {
     try {
       setDownloading(true);
       
-      // Known fix for html2canvas blank issue: reset scroll position before capture
       const scrollPos = window.scrollY;
       window.scrollTo(0, 0);
 
-      // 1. Process inline style elements
-      const styleTags = Array.from(document.querySelectorAll('style'));
-      const originalContents = styleTags.map(tag => tag.innerHTML);
+      // 1. Clone the node and clean all inline style attributes
+      const originalElement = reportRef.current;
+      const clone = originalElement.cloneNode(true) as HTMLElement;
+      
+      // Copy exact dimensions and styling for rendering
+      clone.style.width = originalElement.offsetWidth + 'px';
+      clone.style.position = 'absolute';
+      clone.style.top = '-9999px';
+      clone.style.left = '-9999px';
+      clone.style.background = '#ffffff';
+      document.body.appendChild(clone);
 
-      styleTags.forEach(tag => {
-        if (tag.innerHTML.includes('oklch') || tag.innerHTML.includes('oklab')) {
-          let text = tag.innerHTML;
-          text = replaceOklchInString(text);
-          text = text.replace(/oklab\([^)]+\)/g, 'rgb(79, 70, 229)');
-          tag.innerHTML = text;
+      const cleanInlineStyles = (element: HTMLElement) => {
+        const styleAttr = element.getAttribute('style');
+        if (styleAttr) {
+          let cleaned = replaceOklchInString(styleAttr);
+          cleaned = cleaned.replace(/oklab\s*\([^)]+\)/gi, 'rgb(79, 70, 229)');
+          element.setAttribute('style', cleaned);
         }
-      });
+        Array.from(element.children).forEach(child => {
+          if (child instanceof HTMLElement) {
+            cleanInlineStyles(child);
+          }
+        });
+      };
+      cleanInlineStyles(clone);
 
-      // 2. Process external linked stylesheets
-      const linkTags = Array.from(document.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
-      const tempStyles: HTMLStyleElement[] = [];
+      // 2. Gather all CSS rules from all active stylesheets
+      let allCssText = '';
+      const nodesToDisable: HTMLStyleElement[] = [];
+      const linkTagsToDisable: HTMLLinkElement[] = [];
 
-      for (const link of linkTags) {
+      for (let i = 0; i < document.styleSheets.length; i++) {
+        const sheet = document.styleSheets[i];
         try {
-          const href = link.href;
-          if (href && href.startsWith(window.location.origin)) {
-            const res = await fetch(href);
-            if (res.ok) {
-              let text = await res.text();
-              if (text.includes('oklch') || text.includes('oklab')) {
-                text = replaceOklchInString(text);
-                text = text.replace(/oklab\([^)]+\)/g, 'rgb(79, 70, 229)');
-                
-                // Create temporary style element
-                const tempStyle = document.createElement('style');
-                tempStyle.innerHTML = text;
-                document.head.appendChild(tempStyle);
-                tempStyles.push(tempStyle);
-
-                // Disable original link sheet so html2canvas doesn't read it
-                link.disabled = true;
-              }
+          const rules = sheet.cssRules || sheet.rules;
+          if (rules) {
+            for (let j = 0; j < rules.length; j++) {
+              allCssText += rules[j].cssText + '\n';
+            }
+            if (sheet.ownerNode instanceof HTMLStyleElement) {
+              nodesToDisable.push(sheet.ownerNode);
+            } else if (sheet.ownerNode instanceof HTMLLinkElement) {
+              linkTagsToDisable.push(sheet.ownerNode);
             }
           }
-        } catch (linkErr) {
-          console.error("Failed to process external stylesheet:", link.href, linkErr);
+        } catch (e) {
+          // Fallback if CORS blocks direct rule access
+          const ownerNode = sheet.ownerNode;
+          if (ownerNode instanceof HTMLStyleElement) {
+            allCssText += ownerNode.innerHTML + '\n';
+            nodesToDisable.push(ownerNode);
+          } else if (ownerNode instanceof HTMLLinkElement) {
+            try {
+              const href = ownerNode.href;
+              if (href && href.startsWith(window.location.origin)) {
+                const res = await fetch(href);
+                if (res.ok) {
+                  const text = await res.text();
+                  allCssText += text + '\n';
+                }
+              }
+            } catch (err) {}
+            linkTagsToDisable.push(ownerNode);
+          }
         }
       }
-      
-      const canvas = await html2canvas(reportRef.current, {
+
+      // 3. Preprocess gathered styles
+      let processedCss = replaceOklchInString(allCssText);
+      processedCss = processedCss.replace(/oklab\s*\([^)]+\)/gi, 'rgb(79, 70, 229)');
+
+      // 4. Inject temporary style node
+      const tempStyleNode = document.createElement('style');
+      tempStyleNode.id = 'temp-pdf-style-fix';
+      tempStyleNode.innerHTML = processedCss;
+      document.head.appendChild(tempStyleNode);
+
+      // 5. Disable all original styles
+      nodesToDisable.forEach(node => {
+        node.disabled = true;
+      });
+      linkTagsToDisable.forEach(link => {
+        link.disabled = true;
+      });
+
+      // 6. Capture the cleaned clone
+      const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff'
       });
 
-      // Restore original inline style tag contents immediately
-      styleTags.forEach((tag, idx) => {
-        tag.innerHTML = originalContents[idx];
-      });
+      // 7. Cleanup clone and temporary styles, and restore original styles
+      clone.remove();
+      
+      const tempNode = document.getElementById('temp-pdf-style-fix');
+      if (tempNode) {
+        tempNode.remove();
+      }
 
-      // Re-enable original stylesheet links
-      linkTags.forEach(link => {
+      nodesToDisable.forEach(node => {
+        node.disabled = false;
+      });
+      linkTagsToDisable.forEach(link => {
         link.disabled = false;
       });
 
-      // Remove temporary style elements
-      tempStyles.forEach(style => {
-        style.remove();
-      });
-      
-      // Restore scroll
       window.scrollTo(0, scrollPos);
-      
+
+      // 8. Generate PDF
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      // If content is taller than A4 page, we should handle it, but for a single table it usually fits or scales down.
-      // With this standard approach, it scales down to fit width.
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       pdf.save(`Mess_Report_${data.stats.monthName}.pdf`);
     } catch (error: any) {
