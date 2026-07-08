@@ -161,6 +161,28 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* Mess Code */}
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+            <h3 className="font-bold text-gray-900 text-xl mb-2">মেস জয়েন কোড (Mess Join Code)</h3>
+            <p className="text-sm text-gray-500 mb-4">নতুন মেম্বারদের আপনার মেসে যুক্ত হতে এই ৬ ডিজিটের কোডটি দিন:</p>
+            <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between">
+              <span className="font-mono text-2xl font-extrabold text-indigo-700 select-all tracking-wider">
+                {settings?.code || 'N/A'}
+              </span>
+              <button 
+                onClick={() => {
+                  if (settings?.code) {
+                    navigator.clipboard.writeText(settings.code);
+                    alert('মেস কোডটি ক্লিপবোর্ডে কপি করা হয়েছে!');
+                  }
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition"
+              >
+                কপি করুন
+              </button>
+            </div>
+          </div>
+
           {/* Active Month Settings */}
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
             <h3 className="font-bold text-gray-900 text-xl mb-4">চলমান মাস (Active Month)</h3>
