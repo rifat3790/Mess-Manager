@@ -13,8 +13,8 @@ export default function ChatBubble() {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Only poll if user is logged in
-    if (!mongoUser) return;
+    // Only poll if user is logged in and not on the chat page
+    if (!mongoUser || pathname === '/chat') return;
 
     const fetchCount = async () => {
       const res = await getUnreadCount(mongoUser._id);

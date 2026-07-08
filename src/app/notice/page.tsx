@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Bell, Plus, Edit2, Trash2, Loader2, Save, X, Search, Calendar, User, Sparkles } from 'lucide-react';
-import { getLatestNotices, createNotice, deleteNotice, updateNotice } from '@/app/actions/dataActions';
+import { getLatestNotices, createNotice, deleteNotice, updateNotice, acknowledgeNotice } from '@/app/actions/dataActions';
 import { toast } from 'react-hot-toast';
 
 export default function NoticePage() {
@@ -107,6 +107,21 @@ export default function NoticePage() {
       }
     } catch (err: any) {
       toast.error(err.message || "ভুল হয়েছে।", { id: 'delete-notice' });
+    }
+  };
+
+  const handleAcknowledge = async (noticeId: string) => {
+    if (!mongoUser) return;
+    try {
+      const res = await acknowledgeNotice(noticeId, mongoUser._id);
+      if (res.success) {
+        toast.success("নোটিশটি পড়ার স্বীকৃতি দেওয়া হয়েছে।");
+        fetchNotices();
+      } else {
+        toast.error("স্বীকৃতি দিতে সমস্যা হয়েছে।");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "ভুল হয়েছে।");
     }
   };
 
@@ -265,7 +280,29 @@ export default function NoticePage() {
                 <p className="text-gray-600 font-medium text-xs leading-relaxed whitespace-pre-wrap">{notice.content}</p>
               </div>
 
-              <div className="mt-5 pt-3.5 border-t border-gray-50 flex items-center justify-between text-[10px] font-bold text-gray-400">
+              {/* Notice Acknowledgment Button / Info */}
+              <div className="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between gap-4">
+                {notice.acknowledgedBy?.some((u: any) => (u._id || u) === mongoUser?._id) ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 font-extrabold text-[10px] rounded-xl border border-emerald-100/50">
+                    ✓ আপনি পড়েছেন
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleAcknowledge(notice._id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] rounded-xl transition-all border border-indigo-100/50 active:scale-95 cursor-pointer"
+                  >
+                    আমি পড়েছি
+                  </button>
+                )}
+                
+                {notice.acknowledgedBy && notice.acknowledgedBy.length > 0 && (
+                  <div className="text-[10px] text-gray-500 font-medium max-w-[60%] truncate" title={notice.acknowledgedBy.map((u: any) => u.name).join(', ')}>
+                    <span className="font-extrabold text-gray-700">পড়েছেন ({notice.acknowledgedBy.length}):</span> {notice.acknowledgedBy.map((u: any) => u.name?.split(' ')[0]).join(', ')}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 pt-3.5 border-t border-gray-50 flex items-center justify-between text-[10px] font-bold text-gray-400">
                 <span className="flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-gray-400" />
                   {notice.createdBy?.name || 'অ্যাডমিন'} ({notice.createdBy?.role === 'Super Admin' ? 'Super Admin' : 'Manager'})

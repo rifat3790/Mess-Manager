@@ -91,7 +91,7 @@ export async function getUnreadCount(userId: string) {
     });
     
     // Unread group messages
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('lastGroupChatRead').lean();
     const lastRead = user?.lastGroupChatRead || new Date(0);
     const groupCount = await ChatMessage.countDocuments({
       isGroup: true,

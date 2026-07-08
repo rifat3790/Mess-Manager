@@ -1227,7 +1227,9 @@ export async function getLatestNotices() {
     const notices = await Notice.find()
       .sort({ createdAt: -1 })
       .limit(5)
-      .populate('createdBy', 'name role');
+      .populate('createdBy', 'name role')
+      .populate('acknowledgedBy', 'name role')
+      .lean();
 
     return { success: true, notices: JSON.parse(JSON.stringify(notices)) };
   } catch (error: any) {
@@ -1482,6 +1484,22 @@ export async function getUnifiedDashboardData(userId: string) {
     };
   } catch (error: any) {
     console.error("Unified dashboard fetch error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function acknowledgeNotice(noticeId: string, userId: string) {
+  try {
+    await connectToDatabase();
+    
+    await Notice.findByIdAndUpdate(noticeId, {
+      $addToSet: { acknowledgedBy: new mongoose.Types.ObjectId(userId) }
+    });
+    
+    revalidatePath('/');
+    revalidatePath('/notice');
+    return { success: true };
+  } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
