@@ -32,7 +32,7 @@ export function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (mongoUser && (!mongoUser.messId || mongoUser.role === 'Pending')) {
+  if (mongoUser && mongoUser.role !== 'Super Admin' && (!mongoUser.messId || mongoUser.role === 'Pending')) {
     return <MessSetup />;
   }
 

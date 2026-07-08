@@ -35,7 +35,7 @@ export async function createMess(name: string, userId: string) {
 
     await User.findByIdAndUpdate(userId, {
       messId: newMess._id,
-      role: "Super Admin",
+      role: "Manager",
     });
 
     revalidatePath("/", "layout");

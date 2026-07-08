@@ -12,6 +12,7 @@ import BazaarSchedule from "@/models/BazaarSchedule";
 import BazaarChecklist from "@/models/BazaarChecklist";
 import ChatMessage from "@/models/ChatMessage";
 import MealRequest from "@/models/MealRequest";
+import Mess from "@/models/Mess";
 import mongoose from "mongoose";
 
 export async function wipeDatabase(confirmationCode: string, adminUserId: string) {
@@ -22,7 +23,7 @@ export async function wipeDatabase(confirmationCode: string, adminUserId: string
     
     await connectToDatabase();
     const admin = await User.findById(adminUserId);
-    if (!admin || admin.role !== 'Super Admin' || !admin.messId) {
+    if (!admin || admin.role !== 'Manager' || !admin.messId) {
       return { success: false, error: 'Unauthorized.' };
     }
 
@@ -228,6 +229,54 @@ export async function updateUserPermissions(
     
     return { success: true, user: JSON.parse(JSON.stringify(updated)) };
   } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getSuperAdminDashboardData(adminUserId: string) {
+  try {
+    await connectToDatabase();
+    
+    // Auth check
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || admin.role !== 'Super Admin') {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const [messesCount, usersCount, messes, users, dbStatsRes] = await Promise.all([
+      Mess.countDocuments(),
+      User.countDocuments(),
+      Mess.find().populate('creatorId', 'name email').sort({ createdAt: -1 }).lean(),
+      User.find().populate('messId', 'name').sort({ createdAt: -1 }).lean(),
+      getDatabaseStats()
+    ]);
+    
+    // Group user counts by messId
+    const userCounts = await User.aggregate([
+      { $group: { _id: '$messId', count: { $sum: 1 } } }
+    ]);
+    const userCountMap: Record<string, number> = {};
+    userCounts.forEach((uc: any) => {
+      if (uc._id) {
+        userCountMap[uc._id.toString()] = uc.count;
+      }
+    });
+
+    const populatedMesses = messes.map((m: any) => ({
+      ...m,
+      memberCount: userCountMap[m._id.toString()] || 0
+    }));
+
+    return {
+      success: true,
+      messesCount,
+      usersCount,
+      messes: JSON.parse(JSON.stringify(populatedMesses)),
+      users: JSON.parse(JSON.stringify(users)),
+      dbStats: dbStatsRes.success ? dbStatsRes.stats : null
+    };
+  } catch (error: any) {
+    console.error("Error fetching super admin dashboard data:", error);
     return { success: false, error: error.message };
   }
 }

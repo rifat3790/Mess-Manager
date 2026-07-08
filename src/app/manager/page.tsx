@@ -14,19 +14,20 @@ export default function ChangeManagerPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && (!mongoUser || mongoUser.role !== 'Super Admin')) {
+    if (!authLoading && (!mongoUser || mongoUser.role !== 'Manager')) {
       router.push('/');
     }
   }, [mongoUser, authLoading, router]);
 
   useEffect(() => {
     async function fetchUsers() {
+      if (!mongoUser?._id) return;
       try {
-        const res = await fetch('/api/users');
-        const data = await res.json();
-        if (data.success) {
-          // Filter out Super Admins
-          setUsers(data.users.filter((u: any) => u.role !== 'Super Admin'));
+        const { getMembers } = await import('@/app/actions/dataActions');
+        const res = await getMembers(mongoUser._id);
+        if (res.success && res.users) {
+          // Filter out the current user (the current Manager) and Pending users
+          setUsers(res.users.filter((u: any) => u._id !== mongoUser._id && u.role !== 'Pending'));
         }
       } catch (error) {
         console.error("Error fetching users:", error);
@@ -34,21 +35,17 @@ export default function ChangeManagerPage() {
       setLoading(false);
     }
     fetchUsers();
-  }, []);
+  }, [mongoUser]);
 
   const handleMakeManager = async (userId: string, currentRole: string) => {
     if (currentRole === 'Manager') return;
     
     if (confirm("আপনি কি নিশ্চিত যে আপনি এই মেম্বারকে নতুন ম্যানেজার বানাতে চান? আগের ম্যানেজার তার দায়িত্ব হারিয়ে মেম্বার হয়ে যাবেন।")) {
       setUpdatingId(userId);
-      const res = await changeManager(userId);
+      const res = await changeManager(userId, mongoUser!._id);
       if (res.success) {
-        setUsers(users.map(u => {
-          if (u._id === userId) return { ...u, role: 'Manager' };
-          if (u.role === 'Manager') return { ...u, role: 'Member' };
-          return u;
-        }));
         alert("ম্যানেজার সফলভাবে পরিবর্তন করা হয়েছে!");
+        window.location.href = '/';
       } else {
         alert("ম্যানেজার পরিবর্তন করতে সমস্যা হয়েছে!");
       }
@@ -64,7 +61,7 @@ export default function ChangeManagerPage() {
     );
   }
 
-  if (mongoUser?.role !== 'Super Admin') return null;
+  if (mongoUser?.role !== 'Manager') return null;
 
   return (
     <div className="w-full space-y-6 mt-4">

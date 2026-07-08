@@ -54,6 +54,13 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
   const getMenuItems = () => {
     const role = mongoUser?.role;
     
+    // If global Super Admin
+    if (role === 'Super Admin') {
+      return [
+        { name: 'অ্যাডমিন ড্যাশবোর্ড', icon: ShieldCheck, href: '/' },
+      ];
+    }
+
     // Start with empty items
     let items = [
       { name: 'হোম পেজ', icon: Home, href: '/' },
@@ -73,7 +80,7 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
       items.push({ name: 'মেস চ্যাট', icon: MessageSquare, href: '/chat' });
     }
 
-    if (role === 'Manager' || role === 'Super Admin') {
+    if (role === 'Manager') {
       items = [
         { name: 'হোম পেজ', icon: Home, href: '/' },
         { name: 'মেস নোটিশ বোর্ড', icon: Bell, href: '/notice' },
@@ -88,16 +95,10 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
         { name: 'নতুন মাস শুরু করুন', icon: CalendarPlus, href: '/month/new' },
         { name: 'মেস মেম্বার', icon: Users, href: '/members' },
         { name: 'বাজারের তারিখ', icon: CalendarDays, href: '/bazaar' },
-        { name: 'মেস চ্যাট', icon: MessageSquare, href: '/chat' }
-      ];
-    }
-
-    if (role === 'Super Admin') {
-      items.push(
-        { name: 'অ্যাডমিন', icon: ShieldCheck, href: '/admin' },
+        { name: 'মেস চ্যাট', icon: MessageSquare, href: '/chat' },
         { name: 'ম্যানেজার পরিবর্তন', icon: UserCog, href: '/manager' },
-        { name: 'মেস সেটিংস ও ডিলিট', icon: Settings, href: '/settings' }
-      );
+        { name: 'মেস সেটিংস', icon: Settings, href: '/settings' }
+      ];
     }
 
     return items;

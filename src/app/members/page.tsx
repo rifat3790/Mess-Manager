@@ -25,15 +25,18 @@ export default function MembersPage() {
   const [permsSaving, setPermsSaving] = useState(false);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (mongoUser) {
+      fetchUsers();
+    }
+  }, [mongoUser]);
 
   const fetchUsers = async () => {
+    if (!mongoUser?._id) return;
     try {
-      const res = await fetch('/api/users');
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users);
+      const { getMembers } = await import('@/app/actions/dataActions');
+      const res = await getMembers(mongoUser._id);
+      if (res.success && res.users) {
+        setUsers(res.users);
       }
     } catch (error) {
       console.error("Failed to fetch users", error);
@@ -43,10 +46,11 @@ export default function MembersPage() {
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
+    if (!mongoUser) return;
     // Optimistic update
     setUsers(users.map(u => u._id === userId ? { ...u, role: newRole as any } : u));
     
-    const result = await updateUserRole(userId, newRole);
+    const result = await updateUserRole(userId, newRole, mongoUser._id);
     if (!result.success) {
       alert("Role update failed!");
       fetchUsers(); // Revert on failure
@@ -165,27 +169,8 @@ export default function MembersPage() {
                           অ্যাপ্রুভ করুন
                         </button>
                       )}
-                      
-                      {mongoUser.role === 'Super Admin' && user.role === 'Member' && (
-                        <button 
-                          onClick={() => handleRoleChange(user._id, 'Manager')}
-                          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
-                        >
-                          ম্যানেজার বানান
-                        </button>
-                      )}
-
-                      {mongoUser.role === 'Super Admin' && user.role === 'Manager' && (
-                        <button 
-                          onClick={() => handleRoleChange(user._id, 'Member')}
-                          className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors ml-2"
-                        >
-                          ম্যানেজার থেকে বাদ দিন
-                        </button>
-                      )}
-
                       {/* Access Control Button */}
-                      {(mongoUser.role === 'Super Admin' || mongoUser.role === 'Manager') && user.role !== 'Super Admin' && (
+                      {mongoUser.role === 'Manager' && user.role !== 'Manager' && (
                         <button 
                           onClick={() => handleOpenPermsModal(user)}
                           className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-colors ml-2"
@@ -196,7 +181,7 @@ export default function MembersPage() {
                       )}
 
                       {/* Remove Member Button */}
-                      {(mongoUser.role === 'Super Admin' || mongoUser.role === 'Manager') && user.role !== 'Super Admin' && (
+                      {mongoUser.role === 'Manager' && user.role !== 'Manager' && (
                         <button 
                           onClick={() => handleRemoveMember(user)}
                           className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-lg transition-colors ml-2"

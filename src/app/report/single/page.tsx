@@ -9,6 +9,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { LedgerTable } from '@/components/LedgerTable';
 import { toast } from 'react-hot-toast';
+import { replaceOklchInString } from '@/lib/pdfHelper';
 
 export default function SingleReportPage() {
   const { mongoUser } = useAuth();
@@ -74,8 +75,7 @@ export default function SingleReportPage() {
       styleTags.forEach(tag => {
         if (tag.innerHTML.includes('oklch') || tag.innerHTML.includes('oklab')) {
           let text = tag.innerHTML;
-          // Replace oklch(...) and oklab(...) with rgb fallback to avoid parse crash
-          text = text.replace(/oklch\([^)]+\)/g, 'rgb(79, 70, 229)'); // indigo-600 fallback
+          text = replaceOklchInString(text);
           text = text.replace(/oklab\([^)]+\)/g, 'rgb(79, 70, 229)');
           tag.innerHTML = text;
         }
@@ -93,7 +93,7 @@ export default function SingleReportPage() {
             if (res.ok) {
               let text = await res.text();
               if (text.includes('oklch') || text.includes('oklab')) {
-                text = text.replace(/oklch\([^)]+\)/g, 'rgb(79, 70, 229)');
+                text = replaceOklchInString(text);
                 text = text.replace(/oklab\([^)]+\)/g, 'rgb(79, 70, 229)');
                 
                 // Create temporary style element

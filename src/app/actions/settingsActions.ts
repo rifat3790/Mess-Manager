@@ -81,7 +81,7 @@ export async function deleteEntireMess(confirmText: string, adminUserId: string)
   try {
     await connectToDatabase();
     const admin = await User.findById(adminUserId);
-    if (!admin || admin.role !== 'Super Admin' || !admin.messId) {
+    if (!admin || admin.role !== 'Manager' || !admin.messId) {
       return { success: false, error: 'Unauthorized.' };
     }
 

@@ -51,8 +51,8 @@ export default function SettingsPage() {
     return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-gray-500" /></div>;
   }
 
-  if (mongoUser.role !== 'Super Admin') {
-    return <div className="p-6 text-center text-red-500">Only Super Admin can access Settings.</div>;
+  if (mongoUser.role !== 'Manager') {
+    return <div className="p-6 text-center text-red-500 font-bold">শুধুমাত্র মেস ম্যানেজার সেটিংস অ্যাক্সেস করতে পারবেন।</div>;
   }
 
   const handleToggle = async (key: string, value: any) => {

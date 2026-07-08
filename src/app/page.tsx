@@ -61,7 +61,7 @@ import {
 } from './actions/dataActions';
 import { getBazaarSchedules, getBazaarChecklist, addBazaarChecklistItem, toggleBazaarChecklistItem, deleteBazaarChecklistItem } from './actions/bazaarActions';
 import { getNotifications } from './actions/notificationActions';
-import { getContacts, saveContact, deleteContact } from './actions/adminActions';
+import { getContacts, saveContact, deleteContact, getSuperAdminDashboardData } from './actions/adminActions';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 
@@ -71,6 +71,12 @@ export default function Home() {
   
   const [dataLoading, setDataLoading] = useState(true);
   const [globalStats, setGlobalStats] = useState<any>(null);
+  
+  // Super Admin States
+  const [superAdminData, setSuperAdminData] = useState<any>(null);
+  const [superAdminLoading, setSuperAdminLoading] = useState(true);
+  const [superAdminTab, setSuperAdminTab] = useState<'messes' | 'users' | 'db'>('messes');
+  const [superAdminSearch, setSuperAdminSearch] = useState('');
   const [myStats, setMyStats] = useState<any>(null);
   const [allMembers, setAllMembers] = useState<any[]>([]);
   const [bazaarSchedules, setBazaarSchedules] = useState<any[]>([]);
@@ -186,7 +192,7 @@ export default function Home() {
   const canManageBazaar = isManagerOrAdmin || mongoUser?.permissions?.canManageBazaar;
 
   async function fetchUnifiedData() {
-    if (!user || !mongoUser || mongoUser.role === 'Pending') {
+    if (!user || !mongoUser || mongoUser.role === 'Pending' || mongoUser.role === 'Super Admin') {
       setDataLoading(false);
       return;
     }
@@ -310,6 +316,26 @@ export default function Home() {
   }
 
   useEffect(() => {
+    if (mongoUser && mongoUser.role === 'Super Admin') {
+      async function fetchSA() {
+        try {
+          const res = await getSuperAdminDashboardData(mongoUser!._id);
+          if (res.success) {
+            setSuperAdminData(res);
+          } else {
+            toast.error(res.error || "ডাটা লোড করা যায়নি");
+          }
+        } catch (e: any) {
+          toast.error("ত্রুটি ঘটেছে: " + e.message);
+        } finally {
+          setSuperAdminLoading(false);
+          setDataLoading(false);
+        }
+      }
+      fetchSA();
+      return;
+    }
+
     // Stale-While-Revalidate Caching for instant load times (0ms perceived load)
     try {
       const cached = localStorage.getItem('mess_dashboard_cache_v2');
@@ -708,6 +734,288 @@ export default function Home() {
       <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh]">
         <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
         <p className="text-gray-500 font-medium">লোড হচ্ছে...</p>
+      </div>
+    );
+  }
+
+  if (mongoUser?.role === 'Super Admin') {
+    if (superAdminLoading) {
+      return (
+        <div suppressHydrationWarning className="flex flex-col items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
+          <p className="text-gray-500 font-medium">অ্যাডমিন ড্যাশবোর্ড লোড হচ্ছে...</p>
+        </div>
+      );
+    }
+
+    const filteredMesses = superAdminData?.messes?.filter((m: any) => 
+      m.name.toLowerCase().includes(superAdminSearch.toLowerCase()) || 
+      m.code.toLowerCase().includes(superAdminSearch.toLowerCase())
+    ) || [];
+
+    const filteredUsers = superAdminData?.users?.filter((u: any) => 
+      u.name.toLowerCase().includes(superAdminSearch.toLowerCase()) || 
+      u.email.toLowerCase().includes(superAdminSearch.toLowerCase())
+    ) || [];
+
+    return (
+      <div className="w-full space-y-8 pb-16">
+        {/* Header */}
+        <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-955 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl border border-indigo-950">
+          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+            <Crown className="w-32 h-32 text-indigo-450 animate-pulse" />
+          </div>
+          <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 text-xs font-bold rounded-full border border-indigo-500/30 uppercase tracking-widest">
+            সুপার অ্যাডমিন প্যানেল
+          </span>
+          <h1 className="text-3xl font-extrabold mt-3 tracking-wide">স্বাগতম, {mongoUser.name}</h1>
+          <p className="text-slate-300 text-sm mt-1">অ্যাপ্লিকেশনের গ্লোবাল মনিটরিং হাব এবং সম্পূর্ণ সিস্টেম এনালাইটিক্স</p>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold text-gray-405 uppercase tracking-wider">মোট মেস সংখ্যা</span>
+              <h2 className="text-3xl font-black text-gray-900 mt-2">{superAdminData?.messesCount || 0} টি</h2>
+            </div>
+            <div className="w-14 h-14 bg-indigo-50 text-indigo-650 rounded-2xl flex items-center justify-center">
+              <Sparkles className="w-7 h-7" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold text-gray-405 uppercase tracking-wider">মোট নিবন্ধিত ইউজার</span>
+              <h2 className="text-3xl font-black text-gray-900 mt-2">{superAdminData?.usersCount || 0} জন</h2>
+            </div>
+            <div className="w-14 h-14 bg-emerald-50 text-emerald-650 rounded-2xl flex items-center justify-center">
+              <Users className="w-7 h-7" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold text-gray-405 uppercase tracking-wider">ডাটাবেজ স্টোরেজ ব্যবহৃত</span>
+              <h2 className="text-3xl font-black text-gray-900 mt-2">{superAdminData?.dbStats?.percentUsed ? superAdminData.dbStats.percentUsed.toFixed(2) : '0.00'}%</h2>
+            </div>
+            <div className="w-14 h-14 bg-amber-50 text-amber-650 rounded-2xl flex items-center justify-center">
+              <Activity className="w-7 h-7" />
+            </div>
+          </div>
+        </div>
+
+        {/* Content Panel */}
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Navigation Tabs */}
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-6 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex bg-white border border-gray-250 p-1.5 rounded-2xl shadow-sm w-full sm:w-auto">
+              <button
+                onClick={() => { setSuperAdminTab('messes'); setSuperAdminSearch(''); }}
+                className={cn(
+                  "flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200",
+                  superAdminTab === 'messes' ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-gray-500 hover:text-gray-900"
+                )}
+              >
+                মেস তালিকা
+              </button>
+              <button
+                onClick={() => { setSuperAdminTab('users'); setSuperAdminSearch(''); }}
+                className={cn(
+                  "flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200",
+                  superAdminTab === 'users' ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-gray-500 hover:text-gray-900"
+                )}
+              >
+                ইউজার তালিকা
+              </button>
+              <button
+                onClick={() => { setSuperAdminTab('db'); setSuperAdminSearch(''); }}
+                className={cn(
+                  "flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200",
+                  superAdminTab === 'db' ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-gray-500 hover:text-gray-900"
+                )}
+              >
+                ডাটাবেজ হেলথ
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            {superAdminTab !== 'db' && (
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-4 top-3.5 w-4.5 h-4.5 text-gray-400" />
+                <input
+                  type="text"
+                  value={superAdminSearch}
+                  onChange={(e) => setSuperAdminSearch(e.target.value)}
+                  placeholder={superAdminTab === 'messes' ? "মেসের নাম বা কোড দিয়ে খুঁজুন..." : "মেম্বারের নাম বা ইমেইল দিয়ে খুঁজুন..."}
+                  className="w-full pl-11 pr-4 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Tab Contents */}
+          <div className="p-2">
+            {superAdminTab === 'messes' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">মেস তথ্য</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">মেম্বার সংখ্যা</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">মেস কোড</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">তৈরি করেছেন (ম্যানেজার)</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">তৈরির তারিখ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredMesses.map((m: any) => (
+                      <tr key={m._id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <p className="font-bold text-gray-900">{m.name}</p>
+                          <p className="text-xs text-gray-400 font-semibold">{m._id}</p>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-black rounded-full border border-indigo-100">
+                            {m.memberCount} জন
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-mono font-bold text-indigo-600 tracking-wider">
+                          {m.code}
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-gray-805">{m.creatorId?.name || 'N/A'}</p>
+                          <p className="text-xs text-gray-500">{m.creatorId?.email || ''}</p>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-gray-500 font-semibold">
+                          {formatSafeDate(m.createdAt, { day: '2-digit', month: 'long', year: 'numeric' })}
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredMesses.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-gray-450 font-bold text-sm">কোনো মেস পাওয়া যায়নি।</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {superAdminTab === 'users' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">ইউজার তথ্য</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">রোল</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">সংযুক্ত মেস</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">জয়েনিং ডেট</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredUsers.map((u: any) => (
+                      <tr key={u._id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold">
+                              {u.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-900">{u.name}</p>
+                              <p className="text-xs text-gray-500">{u.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {u.role === 'Super Admin' && <span className="px-2.5 py-1 bg-purple-50 text-purple-750 text-xs font-bold rounded-lg border border-purple-100">সুপার অ্যাডমিন</span>}
+                          {u.role === 'Manager' && <span className="px-2.5 py-1 bg-blue-50 text-blue-750 text-xs font-bold rounded-lg border border-blue-100">ম্যানেজার</span>}
+                          {u.role === 'Member' && <span className="px-2.5 py-1 bg-emerald-50 text-emerald-755 text-xs font-bold rounded-lg border border-emerald-100">মেম্বার</span>}
+                          {u.role === 'Pending' && <span className="px-2.5 py-1 bg-orange-50 text-orange-755 text-xs font-bold rounded-lg border border-orange-100">পেন্ডিং</span>}
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-gray-805">
+                          {u.messId?.name ? (
+                            <span className="flex flex-col">
+                              <span>{u.messId.name}</span>
+                              <span className="text-[10px] text-gray-400 font-mono">({u.messId._id})</span>
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">কোনো মেসে যুক্ত নেই</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-xs text-gray-500 font-semibold">
+                          {formatSafeDate(u.createdAt, { day: '2-digit', month: 'long', year: 'numeric' })}
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredUsers.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-gray-455 font-bold text-sm">কোনো ইউজার পাওয়া যায়নি।</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {superAdminTab === 'db' && superAdminData?.dbStats && (
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Detailed db storage */}
+                  <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-955 text-white p-6 rounded-3xl border border-slate-800">
+                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest">স্টোরেজ এনালাইটিক্স (MongoDB)</span>
+                    <h2 className="text-3xl font-black mt-3 mb-6">
+                      {(superAdminData.dbStats.totalUsedBytes / (1024 * 1024)).toFixed(2)} MB
+                      <span className="text-xs text-gray-400 font-medium ml-2">ব্যবহৃত (৫১২ MB সর্বোচ্চ সীমা থেকে)</span>
+                    </h2>
+                    
+                    <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden mb-3">
+                      <div 
+                        className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                        style={{ width: `${superAdminData.dbStats.percentUsed}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400 font-bold">
+                      <span>{superAdminData.dbStats.percentUsed.toFixed(2)}% ব্যবহৃত</span>
+                      <span>বাকি আছে: {((superAdminData.dbStats.freeSpaceBytes) / (1024 * 1024)).toFixed(2)} MB</span>
+                    </div>
+                  </div>
+
+                  {/* MongoDB logical metrics */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 border border-gray-150 p-5 rounded-2xl flex flex-col justify-between">
+                      <span className="text-[10px] font-black text-gray-450 uppercase tracking-wider">ডাটা অবজেক্টস</span>
+                      <span className="text-xl font-black text-gray-900 mt-2">{superAdminData.dbStats.objectsCount} টি</span>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-150 p-5 rounded-2xl flex flex-col justify-between">
+                      <span className="text-[10px] font-black text-gray-450 uppercase tracking-wider">মোট কালেকশনস</span>
+                      <span className="text-xl font-black text-gray-900 mt-2">{superAdminData.dbStats.collectionsCount} টি</span>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-150 p-5 rounded-2xl flex flex-col justify-between">
+                      <span className="text-[10px] font-black text-gray-450 uppercase tracking-wider">ইনডেক্স সাইজ</span>
+                      <span className="text-xl font-black text-gray-900 mt-2">{(superAdminData.dbStats.indexSizeBytes / 1024).toFixed(1)} KB</span>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-150 p-5 rounded-2xl flex flex-col justify-between">
+                      <span className="text-[10px] font-black text-gray-450 uppercase tracking-wider">ডাটা সাইজ (Logical)</span>
+                      <span className="text-xl font-black text-gray-900 mt-2">{(superAdminData.dbStats.dataSizeBytes / 1024).toFixed(1)} KB</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status indicator */}
+                <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 p-5 rounded-3xl flex gap-3 items-start">
+                  <Activity className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-extrabold text-sm text-emerald-900">সিস্টেমের স্বাস্থ্য চমৎকার!</h4>
+                    <p className="text-xs text-emerald-700/90 mt-1 leading-relaxed">
+                      ডাটাবেজ বর্তমানে কোনো প্রকার পারফরম্যান্স ল্যাগ ছাড়াই এবং স্বাভাবিক রিসোর্স কনজাম্পশন রেট সহ অ্যাক্টিভ রয়েছে। কোনো ধরনের রিস্ট্রিকশন বা প্রক্সি ইস্যু সনাক্ত করা যায়নি।
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
