@@ -23,7 +23,7 @@ export default function RequestBazaarPage() {
   useEffect(() => {
     async function checkExisting() {
       if (!mongoUser) return;
-      const res = await getBazaarSchedules();
+      const res = await getBazaarSchedules(mongoUser._id);
       if (res.success && res.schedules) {
         const pending = res.schedules.find((s: any) => s.userId._id === mongoUser._id && s.status === 'Pending');
         if (pending) setHasPending(true);

@@ -2,21 +2,24 @@
 
 import connectToDatabase from "@/lib/mongoose";
 import Notification from "@/models/Notification";
-
 import Month from "@/models/Month";
+import User from "@/models/User";
+import mongoose from "mongoose";
 
 export async function getNotifications(userId: string) {
   try {
     await connectToDatabase();
     
-    const activeMonth = await Month.findOne({ isActive: true });
+    const user = await User.findById(userId).lean();
+    if (!user) return { success: false, error: "User not found" };
+
+    const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).lean();
     
-    // Get notifications specifically for this user OR global ones (userId = null)
     const query: any = {
       $or: [
-        { userId: userId },
-        { userId: { $exists: false } },
-        { userId: null }
+        { userId: new mongoose.Types.ObjectId(userId) },
+        { messId: user.messId, userId: { $exists: false } },
+        { messId: user.messId, userId: null }
       ]
     };
 
@@ -24,7 +27,7 @@ export async function getNotifications(userId: string) {
       query.createdAt = { $gte: new Date(activeMonth.startDate) };
     }
     
-    const notifications = await Notification.find(query).sort({ createdAt: -1 }).limit(20);
+    const notifications = await Notification.find(query).sort({ createdAt: -1 }).limit(20).lean();
     
     return { success: true, notifications: JSON.parse(JSON.stringify(notifications)) };
   } catch (error: any) {
@@ -43,13 +46,23 @@ export async function markAsRead(notificationId: string) {
   }
 }
 
-export async function createNotification(title: string, message: string, userId?: string) {
+export async function createNotification(title: string, message: string, userId?: string, messId?: string) {
   try {
     await connectToDatabase();
+
+    let resolvedMessId = messId;
+    if (!resolvedMessId && userId) {
+      const user = await User.findById(userId).lean();
+      if (user && user.messId) {
+        resolvedMessId = user.messId.toString();
+      }
+    }
+
     await Notification.create({
       title,
       message,
-      userId: userId || null
+      userId: userId ? new mongoose.Types.ObjectId(userId) : undefined,
+      messId: resolvedMessId ? new mongoose.Types.ObjectId(resolvedMessId) : undefined
     });
     return { success: true };
   } catch (error: any) {

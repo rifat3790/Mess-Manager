@@ -26,40 +26,11 @@ export default function ChatPage() {
   
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (mongoUser) {
-      fetchData();
-      
-      // Polling for real-time updates every 3 seconds
-      const interval = setInterval(fetchMessagesBackground, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [mongoUser]);
-
-  useEffect(() => {
-    // Scroll to bottom on new messages
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    
-    // Mark as read when opening chat
-    if (activeTab === 'Manager' && selectedMemberId && mongoUser) {
-       markMessagesAsRead(mongoUser._id, selectedMemberId);
-       // Proactively update local state
-       setManagerMessages(prev => prev.map(m => {
-         if (m.senderId?._id === selectedMemberId && m.receiverId?._id === mongoUser._id) {
-           return { ...m, isRead: true };
-         }
-         return m;
-       }));
-    } else if (activeTab === 'Group' && mongoUser) {
-       markGroupMessagesAsRead(mongoUser._id);
-    }
-  }, [groupMessages, managerMessages.length, activeTab, selectedMemberId, mongoUser]);
-
   async function fetchMessagesBackground() {
     try {
       if (!mongoUser) return;
       const [groupRes, managerRes] = await Promise.all([
-        getGroupMessages(),
+        getGroupMessages(mongoUser._id),
         getDirectMessages(mongoUser._id)
       ]);
       if (groupRes.success) setGroupMessages(groupRes.messages);
@@ -80,9 +51,9 @@ export default function ChatPage() {
       if (!mongoUser) return;
       setLoading(true);
       const [groupRes, managerRes, membersRes] = await Promise.all([
-        getGroupMessages(),
+        getGroupMessages(mongoUser._id),
         getDirectMessages(mongoUser._id),
-        getMembers()
+        getMembers(mongoUser._id)
       ]);
 
       if (groupRes.success) setGroupMessages(groupRes.messages);
@@ -98,6 +69,37 @@ export default function ChatPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (mongoUser) {
+      fetchData();
+      
+      // Polling for real-time updates every 3 seconds
+      const interval = setInterval(fetchMessagesBackground, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [mongoUser]);
+
+  useEffect(() => {
+    // Scroll to bottom on new messages
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    
+    // Mark as read when opening chat
+    if (activeTab === 'Manager' && selectedMemberId && mongoUser) {
+       markMessagesAsRead(mongoUser._id, selectedMemberId);
+       // Proactively update local state
+       setTimeout(() => {
+         setManagerMessages(prev => prev.map(m => {
+           if (m.senderId?._id === selectedMemberId && m.receiverId?._id === mongoUser._id) {
+             return { ...m, isRead: true };
+           }
+           return m;
+         }));
+       }, 0);
+    } else if (activeTab === 'Group' && mongoUser) {
+       markGroupMessagesAsRead(mongoUser._id);
+     }
+  }, [groupMessages, managerMessages.length, activeTab, selectedMemberId, mongoUser]);
 
   const handleSendGroup = async (e: React.FormEvent) => {
     e.preventDefault();

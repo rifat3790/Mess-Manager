@@ -20,6 +20,7 @@ export default function DeleteMessPage() {
   }, [mongoUser, authLoading, router]);
 
   const handleDelete = async () => {
+    if (!mongoUser) return;
     if (code !== 'DELETE MESS') {
       alert("সঠিক কনফার্মেশন কোড লিখুন!");
       return;
@@ -27,7 +28,7 @@ export default function DeleteMessPage() {
     
     if (confirm("আপনি কি নিশ্চিত? এই কাজটি আর ফেরানো যাবে না। সব মেম্বার এবং হিসেব মুছে যাবে!")) {
       setDeleting(true);
-      const res = await wipeDatabase(code);
+      const res = await wipeDatabase(code, mongoUser._id);
       setDeleting(false);
       
       if (res.success) {

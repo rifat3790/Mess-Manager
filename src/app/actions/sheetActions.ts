@@ -9,41 +9,84 @@ import Deposit from "@/models/Deposit";
 import MealRequest from "@/models/MealRequest";
 import BazaarSchedule from "@/models/BazaarSchedule";
 import Notification from "@/models/Notification";
+import mongoose from "mongoose";
 
-export async function createNewMonthSheet(monthName: string, startDate: Date, carryOverBalance: boolean = false) {
+export async function createNewMonthSheet(monthName: string, startDate: Date, carryOverBalance: boolean = false, adminUserId: string) {
   try {
     await connectToDatabase();
+
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager') || !admin.messId) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+    const messId = admin.messId;
 
     // 1. Calculate balances from previous active month if requested
     const carryOverList: { userId: string; balance: number; userName: string }[] = [];
     if (carryOverBalance) {
-      const prevActiveMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+      const prevActiveMonth = await Month.findOne({ isActive: true, messId }).sort({ createdAt: -1 }).lean();
       if (prevActiveMonth) {
-        const users = await User.find({ role: { $ne: 'Pending' } });
-        const meals = await Meal.find({ monthId: prevActiveMonth._id });
-        const expenses = await Expense.find({ monthId: prevActiveMonth._id });
-        const deposits = await Deposit.find({ monthId: prevActiveMonth._id });
+        const users = await User.find({ role: { $ne: 'Pending' }, messId }).lean();
+        const meals = await Meal.find({ monthId: prevActiveMonth._id }).lean();
+        const expenses = await Expense.find({ monthId: prevActiveMonth._id }).lean();
+        const deposits = await Deposit.find({ monthId: prevActiveMonth._id }).lean();
 
         const totalMeals = meals.reduce((sum: number, m: any) => sum + m.mealCount, 0);
         const mealExpenses = expenses.filter((e: any) => e.type === 'Meal').reduce((sum: number, e: any) => sum + e.amount, 0);
         const mealRate = totalMeals > 0 ? mealExpenses / totalMeals : 0;
         const numUsers = users.length;
 
+        // Group meals by user
+        const userMealMap: Record<string, number> = {};
+        for (const m of meals) {
+          const uid = m.userId?.toString();
+          if (uid) userMealMap[uid] = (userMealMap[uid] || 0) + m.mealCount;
+        }
+
+        // Group deposits by user
+        const userDepositMap: Record<string, number> = {};
+        for (const d of deposits) {
+          const uid = d.userId?.toString();
+          if (uid) userDepositMap[uid] = (userDepositMap[uid] || 0) + d.amount;
+        }
+
+        // Group single expenses by user
+        const userSingleExpenseMap: Record<string, number> = {};
+        for (const e of expenses) {
+          if (e.type === 'Single') {
+            const uid = e.userId?.toString();
+            if (uid) userSingleExpenseMap[uid] = (userSingleExpenseMap[uid] || 0) + e.amount;
+          }
+        }
+
+        // Group joint expenses by user
+        const userJointCostMap: Record<string, number> = {};
+        for (const e of expenses) {
+          if (e.type === 'Joint') {
+            const hasSharedBetween = e.sharedBetween && e.sharedBetween.length > 0;
+            const shareCount = hasSharedBetween ? e.sharedBetween.length : numUsers;
+            const shareAmount = e.amount / shareCount;
+
+            if (hasSharedBetween) {
+              for (const id of e.sharedBetween) {
+                const uid = id?.toString();
+                if (uid) userJointCostMap[uid] = (userJointCostMap[uid] || 0) + shareAmount;
+              }
+            } else {
+              for (const u of users) {
+                const uid = u._id.toString();
+                userJointCostMap[uid] = (userJointCostMap[uid] || 0) + shareAmount;
+              }
+            }
+          }
+        }
+
         for (const user of users) {
-          const userMeals = meals.filter((m: any) => m.userId.toString() === user._id.toString()).reduce((sum: number, m: any) => sum + m.mealCount, 0);
-          const userDeposit = deposits.filter((d: any) => d.userId.toString() === user._id.toString()).reduce((sum: number, d: any) => sum + d.amount, 0);
-          const userSingleExpense = expenses.filter((e: any) => e.type === 'Single' && e.userId?.toString() === user._id.toString()).reduce((sum: number, e: any) => sum + e.amount, 0);
-
-          const userJointExpenses = expenses.filter((e: any) => {
-            if (e.type !== 'Joint') return false;
-            if (!e.sharedBetween || e.sharedBetween.length === 0) return true;
-            return e.sharedBetween.some((id: any) => id.toString() === user._id.toString());
-          });
-
-          const userJointCost = userJointExpenses.reduce((sum: number, e: any) => {
-            const count = (!e.sharedBetween || e.sharedBetween.length === 0) ? numUsers : e.sharedBetween.length;
-            return sum + (e.amount / count);
-          }, 0);
+          const uid = user._id.toString();
+          const userMeals = userMealMap[uid] || 0;
+          const userDeposit = userDepositMap[uid] || 0;
+          const userSingleExpense = userSingleExpenseMap[uid] || 0;
+          const userJointCost = userJointCostMap[uid] || 0;
 
           const mealCost = userMeals * mealRate;
           const totalCost = mealCost + userJointCost + userSingleExpense;
@@ -51,7 +94,7 @@ export async function createNewMonthSheet(monthName: string, startDate: Date, ca
 
           if (userBalance !== 0) {
             carryOverList.push({
-              userId: user._id.toString(),
+              userId: uid,
               balance: parseFloat(userBalance.toFixed(2)),
               userName: user.name
             });
@@ -60,15 +103,16 @@ export async function createNewMonthSheet(monthName: string, startDate: Date, ca
       }
     }
 
-    // 2. Deactivate all months
-    await Month.updateMany({}, { isActive: false });
+    // 2. Deactivate all months of this mess
+    await Month.updateMany({ messId }, { isActive: false });
 
     // 3. Create the new month
     const newMonth = await Month.create({
       name: monthName,
       startDate: startDate,
       sheetTabName: monthName,
-      isActive: true
+      isActive: true,
+      messId
     });
 
     // 4. Carry over balances to the new month
@@ -84,7 +128,7 @@ export async function createNewMonthSheet(monthName: string, startDate: Date, ca
     }
 
     // 5. Automatic cleanup: keep only the latest 3 months' data to free up space
-    const allMonths = await Month.find().sort({ createdAt: -1 });
+    const allMonths = await Month.find({ messId }).sort({ createdAt: -1 }).lean();
     if (allMonths.length > 3) {
       const monthsToDelete = allMonths.slice(3);
       const monthIdsToDelete = monthsToDelete.map(m => m._id);
@@ -97,10 +141,10 @@ export async function createNewMonthSheet(monthName: string, startDate: Date, ca
         Deposit.deleteMany({ monthId: { $in: monthIdsToDelete } }),
         MealRequest.deleteMany({ monthId: { $in: monthIdsToDelete } }),
         BazaarSchedule.deleteMany({ monthId: { $in: monthIdsToDelete } }),
-        Notification.deleteMany({ createdAt: { $lt: new Date(startDate) } })
+        Notification.deleteMany({ messId, createdAt: { $lt: new Date(startDate) } })
       ]);
     } else {
-      await Notification.deleteMany({ createdAt: { $lt: new Date(startDate) } });
+      await Notification.deleteMany({ messId, createdAt: { $lt: new Date(startDate) } });
     }
 
     return { success: true, month: JSON.parse(JSON.stringify(newMonth)) };

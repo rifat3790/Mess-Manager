@@ -25,7 +25,7 @@ export default function NewMonthPage() {
     setError('');
 
     try {
-      const res = await createNewMonthSheet(monthName, new Date(startDate), carryOverBalance);
+      const res = await createNewMonthSheet(monthName, new Date(startDate), carryOverBalance, mongoUser._id);
       if (res.success) {
         setMessage(`সফলভাবে "${monthName}" মাস তৈরি করা হয়েছে!`);
         setMonthName('');

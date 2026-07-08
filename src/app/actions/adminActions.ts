@@ -8,37 +8,48 @@ import Month from "@/models/Month";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
 import Contact from "@/models/Contact";
+import BazaarSchedule from "@/models/BazaarSchedule";
+import BazaarChecklist from "@/models/BazaarChecklist";
+import ChatMessage from "@/models/ChatMessage";
+import MealRequest from "@/models/MealRequest";
 import mongoose from "mongoose";
 
-export async function wipeDatabase(confirmationCode: string) {
+export async function wipeDatabase(confirmationCode: string, adminUserId: string) {
   try {
     if (confirmationCode !== 'DELETE MESS') {
       return { success: false, error: 'ভুল কনফার্মেশন কোড!' };
     }
     
     await connectToDatabase();
-    
-    // We will drop all collections except Settings
-    await Meal.deleteMany({});
-    await Expense.deleteMany({});
-    await Deposit.deleteMany({});
-    await Month.deleteMany({});
-    await Notification.deleteMany({});
-    
-    // For users, maybe keep Super Admin but delete the rest, or just delete their stats?
-    // The request was "delete mess", which implies resetting the entire mess data. Let's delete all members except Super Admin.
-    await User.deleteMany({ role: { $ne: 'Super Admin' } });
+    const admin = await User.findById(adminUserId);
+    if (!admin || admin.role !== 'Super Admin' || !admin.messId) {
+      return { success: false, error: 'Unauthorized.' };
+    }
 
-    // Reset stats for Super Admin
-    await User.updateMany({ role: 'Super Admin' }, {
-      totalMeal: 0,
-      deposit: 0,
-      totalCost: 0,
-      mealCost: 0,
-      singleCost: 0,
-      jointCost: 0,
-      balance: 0
-    });
+    const messId = admin.messId;
+    const months = await Month.find({ messId }).select('_id').lean();
+    const monthIds = months.map(m => m._id);
+
+    await Promise.all([
+      Meal.deleteMany({ monthId: { $in: monthIds } }),
+      Expense.deleteMany({ monthId: { $in: monthIds } }),
+      Deposit.deleteMany({ monthId: { $in: monthIds } }),
+      Month.deleteMany({ messId }),
+      Notification.deleteMany({ messId }),
+      BazaarSchedule.deleteMany({ monthId: { $in: monthIds } }),
+      BazaarChecklist.deleteMany({ messId }),
+      ChatMessage.deleteMany({ messId }),
+      User.deleteMany({ messId, role: { $ne: 'Super Admin' } }),
+      User.updateMany({ messId, role: 'Super Admin' }, {
+        totalMeal: 0,
+        deposit: 0,
+        totalCost: 0,
+        mealCost: 0,
+        singleCost: 0,
+        jointCost: 0,
+        balance: 0
+      })
+    ]);
 
     return { success: true };
   } catch (error: any) {
@@ -47,23 +58,29 @@ export async function wipeDatabase(confirmationCode: string) {
   }
 }
 
-export async function getAllMonths() {
+export async function getAllMonths(userId: string) {
   try {
     await connectToDatabase();
-    const months = await Month.find().sort({ createdAt: -1 });
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: true, months: [] };
+
+    const months = await Month.find({ messId: user.messId }).sort({ createdAt: -1 }).lean();
     return { success: true, months: JSON.parse(JSON.stringify(months)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-export async function setActiveMonth(monthId: string) {
+export async function setActiveMonth(monthId: string, adminUserId: string) {
   try {
     await connectToDatabase();
-    // Set all to inactive
-    await Month.updateMany({}, { isActive: false });
-    // Set the specific one to active
-    await Month.findByIdAndUpdate(monthId, { isActive: true });
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager') || !admin.messId) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    await Month.updateMany({ messId: admin.messId }, { isActive: false });
+    await Month.findOneAndUpdate({ _id: monthId, messId: admin.messId }, { isActive: true });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -80,7 +97,7 @@ export async function getDatabaseStats() {
     
     const stats = await mongoose.connection.db.stats();
     
-    const totalLimitBytes = 512 * 1024 * 1024; // 512 MB
+    const totalLimitBytes = 512 * 1024 * 1024;
     const storageSizeBytes = stats.storageSize || 0;
     const dataSizeBytes = stats.dataSize || 0;
     const indexSizeBytes = stats.indexSize || 0;
@@ -88,7 +105,7 @@ export async function getDatabaseStats() {
     
     const percentUsed = (totalUsedBytes / totalLimitBytes) * 100;
     const freeSpaceBytes = Math.max(totalLimitBytes - totalUsedBytes, 0);
-
+ 
     return {
       success: true,
       stats: {
@@ -110,20 +127,22 @@ export async function getDatabaseStats() {
   }
 }
 
-export async function getContacts() {
+export async function getContacts(userId: string) {
   try {
     await connectToDatabase();
-    let contacts = await Contact.find().sort({ createdAt: 1 });
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: true, contacts: [] };
+
+    let contacts = await Contact.find({ messId: user.messId }).sort({ createdAt: 1 }).lean();
     
-    // Seed default contacts if empty
     if (contacts.length === 0) {
       const defaultContacts = [
-        { designation: "মেস ম্যানেজার", name: "Md Refayet Hossen", phone: "+8801700000000" },
-        { designation: "সহকারী ম্যানেজার", name: "MD Rifat", phone: "+8801900000000" },
-        { designation: "মেস বাবুর্চি (Cook)", name: "Babul Bhai", phone: "+8801800000000" }
+        { designation: "মেস ম্যানেজার", name: user.name, phone: "+8801700000000", messId: user.messId },
+        { designation: "সহকারী ম্যানেজার", name: "MD Rifat", phone: "+8801900000000", messId: user.messId },
+        { designation: "মেস বাবুর্চি (Cook)", name: "Babul Bhai", phone: "+8801800000000", messId: user.messId }
       ];
       await Contact.create(defaultContacts);
-      contacts = await Contact.find().sort({ createdAt: 1 });
+      contacts = await Contact.find({ messId: user.messId }).sort({ createdAt: 1 }).lean();
     }
     
     return { success: true, contacts: JSON.parse(JSON.stringify(contacts)) };
@@ -136,26 +155,28 @@ export async function saveContact(requesterId: string, contactData: { _id?: stri
   try {
     await connectToDatabase();
     
-    // Authorization check
-    const requester = await User.findById(requesterId);
-    if (!requester || (requester.role !== 'Super Admin' && requester.role !== 'Manager')) {
+    const requester = await User.findById(requesterId).lean();
+    if (!requester || (requester.role !== 'Super Admin' && requester.role !== 'Manager') || !requester.messId) {
       return { success: false, error: 'অনুমতি নেই!' };
     }
     
     if (contactData._id) {
-      // Update existing
-      const updated = await Contact.findByIdAndUpdate(contactData._id, {
-        designation: contactData.designation,
-        name: contactData.name,
-        phone: contactData.phone
-      }, { new: true });
+      const updated = await Contact.findOneAndUpdate(
+        { _id: contactData._id, messId: requester.messId },
+        {
+          designation: contactData.designation,
+          name: contactData.name,
+          phone: contactData.phone
+        },
+        { new: true }
+      ).lean();
       return { success: true, contact: JSON.parse(JSON.stringify(updated)) };
     } else {
-      // Create new
       const created = await Contact.create({
         designation: contactData.designation,
         name: contactData.name,
-        phone: contactData.phone
+        phone: contactData.phone,
+        messId: requester.messId
       });
       return { success: true, contact: JSON.parse(JSON.stringify(created)) };
     }
@@ -168,13 +189,12 @@ export async function deleteContact(requesterId: string, contactId: string) {
   try {
     await connectToDatabase();
     
-    // Authorization check
-    const requester = await User.findById(requesterId);
-    if (!requester || (requester.role !== 'Super Admin' && requester.role !== 'Manager')) {
+    const requester = await User.findById(requesterId).lean();
+    if (!requester || (requester.role !== 'Super Admin' && requester.role !== 'Manager') || !requester.messId) {
       return { success: false, error: 'অনুমতি নেই!' };
     }
     
-    await Contact.findByIdAndDelete(contactId);
+    await Contact.findOneAndDelete({ _id: contactId, messId: requester.messId });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -195,8 +215,7 @@ export async function updateUserPermissions(
   try {
     await connectToDatabase();
     
-    // Authorization check
-    const requester = await User.findById(requesterId);
+    const requester = await User.findById(requesterId).lean();
     if (!requester || (requester.role !== 'Super Admin' && requester.role !== 'Manager')) {
       return { success: false, error: 'অনুমতি নেই!' };
     }
@@ -205,11 +224,10 @@ export async function updateUserPermissions(
       targetUserId,
       { permissions },
       { new: true }
-    );
+    ).lean();
     
     return { success: true, user: JSON.parse(JSON.stringify(updated)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
-

@@ -315,21 +315,23 @@ export default function Home() {
       const cached = localStorage.getItem('mess_dashboard_cache_v2');
       if (cached) {
         const data = JSON.parse(cached);
-        if (data.globalStats) setGlobalStats(data.globalStats);
-        if (data.myStats) setMyStats(data.myStats);
-        if (data.allMembers) setAllMembers(data.allMembers);
-        if (data.bazaarSchedules) setBazaarSchedules(data.bazaarSchedules);
-        if (data.notifications) setNotifications(data.notifications);
-        if (data.contacts) setContacts(data.contacts);
-        if (data.bazaarChecklist) setBazaarChecklist(data.bazaarChecklist);
-        if (data.menu) {
-          setMenu(data.menu);
-          setMenuBreakfast(data.menu.breakfast || '');
-          setMenuLunch(data.menu.lunch || '');
-          setMenuDinner(data.menu.dinner || '');
-        }
-        if (data.notices) setNotices(data.notices);
-        setDataLoading(false);
+        setTimeout(() => {
+          if (data.globalStats) setGlobalStats(data.globalStats);
+          if (data.myStats) setMyStats(data.myStats);
+          if (data.allMembers) setAllMembers(data.allMembers);
+          if (data.bazaarSchedules) setBazaarSchedules(data.bazaarSchedules);
+          if (data.notifications) setNotifications(data.notifications);
+          if (data.contacts) setContacts(data.contacts);
+          if (data.bazaarChecklist) setBazaarChecklist(data.bazaarChecklist);
+          if (data.menu) {
+            setMenu(data.menu);
+            setMenuBreakfast(data.menu.breakfast || '');
+            setMenuLunch(data.menu.lunch || '');
+            setMenuDinner(data.menu.dinner || '');
+          }
+          if (data.notices) setNotices(data.notices);
+          setDataLoading(false);
+        }, 0);
       }
     } catch (e) {
       console.warn("Failed to load stale cache:", e);
@@ -389,7 +391,9 @@ export default function Home() {
         if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
           window.navigator.vibrate([200, 100, 200]);
         }
-        setPopupNotification(newNotifs[0]);
+        setTimeout(() => {
+          setPopupNotification(newNotifs[0]);
+        }, 0);
         const updatedSeenIds = [...seenIds, ...newNotifs.map((n: any) => n._id)];
         localStorage.setItem('seenNotifications', JSON.stringify(updatedSeenIds));
       }
@@ -399,10 +403,12 @@ export default function Home() {
   // Initialize draft meals to 0 by default for standard member request input
   useEffect(() => {
     if (myMeals) {
-      setDraftMeals({
-        today: { breakfast: 0, lunch: 0, dinner: 0 },
-        tomorrow: { breakfast: 0, lunch: 0, dinner: 0 }
-      });
+      setTimeout(() => {
+        setDraftMeals({
+          today: { breakfast: 0, lunch: 0, dinner: 0 },
+          tomorrow: { breakfast: 0, lunch: 0, dinner: 0 }
+        });
+      }, 0);
     }
   }, [myMeals]);
 

@@ -7,19 +7,23 @@ import { getAllMonthsReportData } from '@/app/actions/dataActions';
 import { cn } from '@/lib/utils';
 
 export default function AllReportsPage() {
+  const { mongoUser } = useAuth();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
     const fetchData = async () => {
-      const res = await getAllMonthsReportData();
+      if (!mongoUser?._id) return;
+      const res = await getAllMonthsReportData(mongoUser._id);
       if (res.success) {
         setData(res.data);
       }
       setLoading(false);
     };
-    fetchData();
-  }, []);
+    if (mongoUser) {
+      fetchData();
+    }
+  }, [mongoUser]);
 
   if (loading) {
     return (

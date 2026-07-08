@@ -325,10 +325,13 @@ export async function updateDeposit(id: string, amount: number) {
   }
 }
 
-export async function getActiveMonth() {
+export async function getActiveMonth(userId: string) {
   try {
     await connectToDatabase();
-    const month = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: false, error: "Mess not found." };
+
+    const month = await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
     if (!month) return { success: false, error: "No active month found" };
     return { success: true, month: JSON.parse(JSON.stringify(month)) };
   } catch (error: any) {
@@ -336,47 +339,63 @@ export async function getActiveMonth() {
   }
 }
 
-export async function setActiveMonth(monthId: string) {
+export async function setActiveMonth(monthId: string, adminUserId: string) {
   try {
     await connectToDatabase();
-    // Deactivate all months
-    await Month.updateMany({}, { isActive: false });
-    // Activate selected month
-    await Month.findByIdAndUpdate(monthId, { isActive: true });
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager') || !admin.messId) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    await Month.updateMany({ messId: admin.messId }, { isActive: false });
+    await Month.findOneAndUpdate({ _id: monthId, messId: admin.messId }, { isActive: true });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-export async function getAllMonths() {
+export async function getAllMonths(userId: string) {
   try {
     await connectToDatabase();
-    const months = await Month.find({}).sort({ createdAt: -1 });
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: true, months: [] };
+
+    const months = await Month.find({ messId: user.messId }).sort({ createdAt: -1 }).lean();
     return { success: true, months: JSON.parse(JSON.stringify(months)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-export async function getMembers() {
+export async function getMembers(userId: string) {
   try {
     await connectToDatabase();
-    const users = await User.find({ role: { $in: ['Member', 'Manager', 'Super Admin'] } });
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: true, users: [] };
+
+    const users = await User.find({
+      messId: user.messId,
+      role: { $in: ['Member', 'Manager', 'Super Admin'] }
+    }).lean();
+
     return { success: true, users: JSON.parse(JSON.stringify(users)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-export async function getDashboardData() {
+export async function getDashboardData(userId: string) {
   try {
     await connectToDatabase();
     
-    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 }).lean();
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: true, stats: null, members: [] };
+
+    const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
     if (!activeMonth) return { success: true, stats: null, members: [] };
 
-    const users = await User.find({ role: { $ne: 'Pending' } }).lean();
+    const users = await User.find({ role: { $ne: 'Pending' }, messId: user.messId }).lean();
 
     const meals = await Meal.find({ monthId: activeMonth._id }).lean();
     const expenses = await Expense.find({ monthId: activeMonth._id }).lean();
@@ -484,12 +503,15 @@ export async function getDashboardData() {
   }
 }
 
-export async function getAllMonthsReportData() {
+export async function getAllMonthsReportData(userId: string) {
   try {
     await connectToDatabase();
     
-    const months = await Month.find().sort({ createdAt: -1 }).lean();
-    const users = await User.find({ role: { $ne: 'Pending' } }).lean();
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: true, data: [] };
+
+    const months = await Month.find({ messId: user.messId }).sort({ createdAt: -1 }).lean();
+    const users = await User.find({ role: { $ne: 'Pending' }, messId: user.messId }).lean();
     
     const allData = [];
     
@@ -765,7 +787,10 @@ export async function getUserMealStatusForTodayAndTomorrow(userId: string) {
   try {
     await connectToDatabase();
     
-    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: false, error: "Mess not found" };
+
+    const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
     if (!activeMonth) {
       return { success: false, error: "No active month" };
     }
@@ -993,17 +1018,20 @@ export async function createOrUpdateMealRequest(
   }
 }
 
-export async function getPendingMealRequests() {
+export async function getPendingMealRequests(userId: string) {
   try {
     await connectToDatabase();
     
-    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: true, requests: [] };
+
+    const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
     if (!activeMonth) return { success: true, requests: [] };
 
     const requests = await MealRequest.find({
       monthId: activeMonth._id,
       status: 'Pending'
-    }).populate('userId', 'name email photoURL');
+    }).populate('userId', 'name email photoURL').lean();
 
     return { success: true, requests: JSON.parse(JSON.stringify(requests)) };
   } catch (error: any) {
@@ -1156,9 +1184,11 @@ export async function rejectMealRequest(requestId: string, adminUserId: string) 
   }
 }
 
-export async function getTodayMenu() {
+export async function getTodayMenu(userId: string) {
   try {
     await connectToDatabase();
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: false, error: "Mess not found" };
     
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -1166,8 +1196,9 @@ export async function getTodayMenu() {
     todayEnd.setHours(23, 59, 59, 999);
 
     let menu = await Menu.findOne({
+      messId: user.messId,
       date: { $gte: todayStart, $lte: todayEnd }
-    });
+    }).lean();
 
     if (!menu) {
       return { success: true, menu: { breakfast: '', lunch: '', dinner: '', date: todayStart } };
@@ -1183,8 +1214,8 @@ export async function updateTodayMenu(breakfast: string, lunch: string, dinner: 
   try {
     await connectToDatabase();
 
-    const admin = await User.findById(adminUserId);
-    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager') || !admin.messId) {
       return { success: false, error: 'Unauthorized.' };
     }
 
@@ -1194,6 +1225,7 @@ export async function updateTodayMenu(breakfast: string, lunch: string, dinner: 
     todayEnd.setHours(23, 59, 59, 999);
 
     let menu = await Menu.findOne({
+      messId: admin.messId,
       date: { $gte: todayStart, $lte: todayEnd }
     });
 
@@ -1207,11 +1239,17 @@ export async function updateTodayMenu(breakfast: string, lunch: string, dinner: 
         date: todayStart,
         breakfast,
         lunch,
-        dinner
+        dinner,
+        messId: admin.messId
       });
     }
 
-    await createNotification("আজকের মেনু আপডেট করা হয়েছে", `আজকের খাবারের মেনু আপডেট করা হয়েছে (সকাল: ${breakfast || 'নাই'}, দুপুর: ${lunch || 'নাই'}, রাত: ${dinner || 'নাই'})।`);
+    await createNotification(
+      "আজকের মেনু আপডেট করা হয়েছে",
+      `আজকের খাবারের মেনু আপডেট করা হয়েছে (সকাল: ${breakfast || 'নাই'}, দুপুর: ${lunch || 'নাই'}, রাত: ${dinner || 'নাই'})।`,
+      undefined,
+      admin.messId.toString()
+    );
 
     revalidatePath('/', 'layout');
     return { success: true, menu: JSON.parse(JSON.stringify(menu)) };
@@ -1220,11 +1258,14 @@ export async function updateTodayMenu(breakfast: string, lunch: string, dinner: 
   }
 }
 
-export async function getLatestNotices() {
+export async function getLatestNotices(userId: string) {
   try {
     await connectToDatabase();
 
-    const notices = await Notice.find()
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: true, notices: [] };
+
+    const notices = await Notice.find({ messId: user.messId })
       .sort({ createdAt: -1 })
       .limit(5)
       .populate('createdBy', 'name role')
@@ -1241,18 +1282,24 @@ export async function createNotice(title: string, content: string, adminUserId: 
   try {
     await connectToDatabase();
 
-    const admin = await User.findById(adminUserId);
-    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager')) {
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager') || !admin.messId) {
       return { success: false, error: 'Unauthorized.' };
     }
 
     const notice = await Notice.create({
       title,
       content,
-      createdBy: adminUserId
+      createdBy: adminUserId,
+      messId: admin.messId
     });
 
-    await createNotification("মেসে নতুন নোটিশ দেওয়া হয়েছে", `শিরোনাম: ${title}`);
+    await createNotification(
+      "মেসে নতুন নোটিশ দেওয়া হয়েছে",
+      `শিরোনাম: ${title}`,
+      undefined,
+      admin.messId.toString()
+    );
 
     revalidatePath('/', 'layout');
     return { success: true, notice: JSON.parse(JSON.stringify(notice)) };
@@ -1369,7 +1416,20 @@ export async function getMenuRatings(date: Date, requestingUserId?: string) {
     const ratingDate = new Date(date);
     ratingDate.setHours(0, 0, 0, 0);
 
-    const ratingsList = await MenuRating.find({ date: ratingDate }).populate('userId', 'name role');
+    let ratingsList: any[] = [];
+    if (requestingUserId) {
+      const user = await User.findById(requestingUserId).lean();
+      if (user && user.messId) {
+        const messUsers = await User.find({ messId: user.messId }).select('_id').lean();
+        const messUserIds = messUsers.map(u => u._id);
+        ratingsList = await MenuRating.find({
+          date: ratingDate,
+          userId: { $in: messUserIds }
+        }).populate('userId', 'name role').lean();
+      }
+    } else {
+      ratingsList = await MenuRating.find({ date: ratingDate }).populate('userId', 'name role').lean();
+    }
 
     // Calculate averages
     let bSum = 0, bCount = 0;
@@ -1457,15 +1517,15 @@ export async function getUnifiedDashboardData(userId: string) {
       noticesRes,
       ratingsRes
     ] = await Promise.all([
-      getDashboardData(),
-      getBazaarSchedules(),
+      getDashboardData(userId),
+      getBazaarSchedules(userId),
       getNotifications(userId),
-      getContacts(),
-      getBazaarChecklist(),
+      getContacts(userId),
+      getBazaarChecklist(userId),
       getUserMealStatusForTodayAndTomorrow(userId),
-      getPendingMealRequests(),
-      getTodayMenu(),
-      getLatestNotices(),
+      getPendingMealRequests(userId),
+      getTodayMenu(userId),
+      getLatestNotices(userId),
       getMenuRatings(new Date(), userId)
     ]);
 
@@ -1474,7 +1534,7 @@ export async function getUnifiedDashboardData(userId: string) {
       dashboard: dashboardRes.success ? dashboardRes : null,
       bazaarSchedules: bazaarSchedulesRes.success ? bazaarSchedulesRes.schedules : [],
       notifications: notificationsRes.success ? notificationsRes.notifications : [],
-      contacts: contactsRes.success ? contactsRes.contacts : [],
+      contacts: contactsRes.success ? (contactsRes as any).contacts : [],
       bazaarChecklist: bazaarChecklistRes.success ? bazaarChecklistRes.items : [],
       userMeals: userMealsRes.success ? userMealsRes : null,
       pendingRequests: pendingRequestsRes.success ? pendingRequestsRes.requests : [],

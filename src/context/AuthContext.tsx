@@ -9,6 +9,7 @@ export interface MongoUser {
   name: string;
   email: string;
   role: 'Super Admin' | 'Manager' | 'Member' | 'Pending';
+  messId?: string;
   permissions?: {
     canManageMeals: boolean;
     canManageExpenses: boolean;
@@ -24,9 +25,17 @@ interface AuthContextType {
   loading: boolean;
   messName: string;
   settings: any | null;
+  refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, mongoUser: null, loading: true, messName: "Mohakhali Mess", settings: null });
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  mongoUser: null,
+  loading: true,
+  messName: "Mohakhali Mess",
+  settings: null,
+  refreshUser: async () => {}
+});
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -37,23 +46,42 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [messName, setMessName] = useState("Mohakhali Mess");
   const [settings, setSettings] = useState<any>(null);
 
-  useEffect(() => {
-    const fetchSettings = async () => {
+  const fetchSettings = async (userId: string) => {
+    try {
+      const { getSettings } = await import('@/app/actions/settingsActions');
+      const res = await getSettings(userId);
+      if (res.success && res.settings) {
+        setSettings(res.settings);
+        if (res.settings.messName) {
+          setMessName(res.settings.messName);
+        }
+      } else {
+        setSettings(null);
+        setMessName("Mohakhali Mess");
+      }
+    } catch (err) {
+      console.error("Failed to fetch settings", err);
+    }
+  };
+
+  const refreshUser = async () => {
+    if (auth.currentUser) {
       try {
-        const { getSettings } = await import('@/app/actions/settingsActions');
-        const res = await getSettings();
-        if (res.success && res.settings) {
-          setSettings(res.settings);
-          if (res.settings.messName) {
-            setMessName(res.settings.messName);
+        const res = await fetch(`/api/auth/me?uid=${auth.currentUser.uid}`);
+        if (res.ok) {
+          const data = await res.json();
+          setMongoUser(data.user);
+          if (data.user && data.user._id) {
+            await fetchSettings(data.user._id);
           }
         }
       } catch (err) {
-        console.error("Failed to fetch settings", err);
+        console.error("Failed to refresh user:", err);
       }
-    };
-    fetchSettings();
+    }
+  };
 
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       
@@ -80,15 +108,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (res.ok) {
             const data = await res.json();
             setMongoUser(data.user);
+            if (data.user && data.user._id) {
+              fetchSettings(data.user._id);
+            }
           } else {
             setMongoUser(null);
+            setSettings(null);
+            setMessName("Mohakhali Mess");
           }
         } catch (err) {
           console.error("Failed to fetch mongo user", err);
           setMongoUser(null);
+          setSettings(null);
+          setMessName("Mohakhali Mess");
         }
       } else {
         setMongoUser(null);
+        setSettings(null);
+        setMessName("Mohakhali Mess");
       }
       
       setLoading(false);
@@ -98,7 +135,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, mongoUser, loading, messName, settings }}>
+    <AuthContext.Provider value={{ user, mongoUser, loading, messName, settings, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

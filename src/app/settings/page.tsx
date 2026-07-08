@@ -19,23 +19,25 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const [months, setMonths] = useState<any[]>([]);
   const [activeMonthId, setActiveMonthId] = useState('');
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (mongoUser?._id) {
+      fetchData(mongoUser._id);
+    }
+  }, [mongoUser]);
+
+  const fetchData = async (userId: string) => {
     try {
-      const res = await getSettings();
+      const res = await getSettings(userId);
       if (res.success) setSettings(res.settings);
       
       const { getAllMonths, getActiveMonth } = await import('@/app/actions/dataActions');
-      const monthsRes = await getAllMonths();
+      const monthsRes = await getAllMonths(userId);
       if (monthsRes.success) setMonths(monthsRes.months);
       
-      const activeRes = await getActiveMonth();
+      const activeRes = await getActiveMonth(userId);
       if (activeRes.success && activeRes.month) setActiveMonthId(activeRes.month._id);
       
     } catch (err) {
@@ -45,15 +47,20 @@ export default function SettingsPage() {
     }
   };
 
-  if (mongoUser?.role !== 'Super Admin') {
+  if (fetching || !mongoUser) {
+    return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-gray-500" /></div>;
+  }
+
+  if (mongoUser.role !== 'Super Admin') {
     return <div className="p-6 text-center text-red-500">Only Super Admin can access Settings.</div>;
   }
 
   const handleToggle = async (key: string, value: any) => {
+    if (!mongoUser._id) return;
     setLoading(true);
     setMessage('');
     try {
-      const res = await updateSettings({ [key]: value });
+      const res = await updateSettings({ [key]: value }, mongoUser._id);
       if (res.success) {
         setSettings(res.settings);
         setMessage('সেটিংস আপডেট হয়েছে।');
@@ -67,11 +74,12 @@ export default function SettingsPage() {
   };
 
   const handleActiveMonthChange = async (monthId: string) => {
+    if (!mongoUser._id) return;
     setLoading(true);
     setMessage('');
     try {
       const { setActiveMonth } = await import('@/app/actions/dataActions');
-      const res = await setActiveMonth(monthId);
+      const res = await setActiveMonth(monthId, mongoUser._id);
       if (res.success) {
         setActiveMonthId(monthId);
         setMessage('চলমান মাস সফলভাবে পরিবর্তন করা হয়েছে।');
@@ -85,6 +93,7 @@ export default function SettingsPage() {
   };
 
   const handleDeleteMess = async () => {
+    if (!mongoUser._id) return;
     if (deleteConfirm !== 'DELETE MESS') {
       setDeleteError('অনুগ্রহ করে সঠিক কনফার্মেশন টেক্সট লিখুন (DELETE MESS)');
       return;
@@ -96,7 +105,7 @@ export default function SettingsPage() {
     setDeleteError('');
     
     try {
-      const res = await deleteEntireMess(deleteConfirm);
+      const res = await deleteEntireMess(deleteConfirm, mongoUser._id);
       if (res.success) {
         alert('আপনার মেসের সম্পূর্ণ ডেটা ডিলিট করা হয়েছে।');
         window.location.href = '/';
@@ -109,10 +118,6 @@ export default function SettingsPage() {
       setDeleting(false);
     }
   };
-
-  if (fetching) {
-    return <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 animate-spin text-gray-500" /></div>;
-  }
 
   return (
     <div className="w-full mt-4 space-y-8">

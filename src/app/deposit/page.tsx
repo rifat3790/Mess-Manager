@@ -29,15 +29,12 @@ export default function DepositPage() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
 
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
   const fetchInitialData = async () => {
+    if (!mongoUser) return;
     try {
       const [monthRes, dashboardRes] = await Promise.all([
-        getActiveMonth(),
-        getDashboardData()
+        getActiveMonth(mongoUser._id),
+        getDashboardData(mongoUser._id)
       ]);
 
       if (monthRes.success) setActiveMonth(monthRes.month);
@@ -51,6 +48,12 @@ export default function DepositPage() {
       setFetching(false);
     }
   };
+
+  useEffect(() => {
+    if (mongoUser) {
+      fetchInitialData();
+    }
+  }, [mongoUser]);
 
   const canManage = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager' || mongoUser?.permissions?.canManageDeposits;
   if (!canManage) {
@@ -77,7 +80,7 @@ export default function DepositPage() {
         toast.success('টাকা জমা সফলভাবে যুক্ত হয়েছে!');
         setAmount('');
         // Refresh dashboard data to update the preview card
-        const dashboardRes = await getDashboardData();
+        const dashboardRes = await getDashboardData(mongoUser._id);
         if (dashboardRes.success && dashboardRes.members) {
           setMembers(dashboardRes.members);
         }

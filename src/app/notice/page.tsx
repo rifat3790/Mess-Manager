@@ -26,9 +26,10 @@ export default function NoticePage() {
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
   const fetchNotices = async () => {
+    if (!mongoUser) return;
     try {
       setLoading(true);
-      const res = await getLatestNotices();
+      const res = await getLatestNotices(mongoUser._id);
       if (res.success) {
         setNotices(res.notices || []);
       } else {
@@ -43,7 +44,9 @@ export default function NoticePage() {
 
   useEffect(() => {
     if (mongoUser) {
-      fetchNotices();
+      setTimeout(() => {
+        fetchNotices();
+      }, 0);
     }
   }, [mongoUser]);
 

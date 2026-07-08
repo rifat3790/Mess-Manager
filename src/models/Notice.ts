@@ -5,6 +5,7 @@ export interface INotice extends Document {
   content: string;
   createdBy: mongoose.Types.ObjectId;
   acknowledgedBy: mongoose.Types.ObjectId[];
+  messId: mongoose.Types.ObjectId;
   createdAt: Date;
 }
 
@@ -13,6 +14,7 @@ const NoticeSchema: Schema = new Schema({
   content: { type: String, required: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   acknowledgedBy: [{ type: Schema.Types.ObjectId, ref: 'User', default: [] }],
+  messId: { type: Schema.Types.ObjectId, ref: 'Mess', required: true, index: true },
   createdAt: { type: Date, default: Date.now },
 });
 

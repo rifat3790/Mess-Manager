@@ -47,23 +47,21 @@ export default function ExpensePage() {
     "ওয়াইফাই বিল"
   ];
 
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
   const refreshExpensesList = async () => {
-    const res = await getDashboardData();
+    if (!mongoUser) return;
+    const res = await getDashboardData(mongoUser._id);
     if (res.success && res.expenses) {
       setExpensesList(res.expenses.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     }
   };
 
   const fetchInitialData = async () => {
+    if (!mongoUser) return;
     try {
       const [monthRes, membersRes, dashboardRes] = await Promise.all([
-        getActiveMonth(),
-        getMembers(),
-        getDashboardData()
+        getActiveMonth(mongoUser._id),
+        getMembers(mongoUser._id),
+        getDashboardData(mongoUser._id)
       ]);
 
       if (monthRes.success) setActiveMonth(monthRes.month);
@@ -83,6 +81,12 @@ export default function ExpensePage() {
       setFetching(false);
     }
   };
+
+  useEffect(() => {
+    if (mongoUser) {
+      fetchInitialData();
+    }
+  }, [mongoUser]);
 
   const handleDeleteExpense = async (id: string) => {
     if (!window.confirm('আপনি কি নিশ্চিত যে এই খরচটি ডিলিট করতে চান?')) return;

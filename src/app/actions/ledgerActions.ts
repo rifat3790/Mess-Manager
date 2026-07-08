@@ -7,16 +7,19 @@ import Deposit from "@/models/Deposit";
 import Month from "@/models/Month";
 import User from "@/models/User";
 
-export async function getLedgerData() {
+export async function getLedgerData(userId: string) {
   try {
     await connectToDatabase();
     
-    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) return { success: true, entries: [] };
+    
+    const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
     if (!activeMonth) return { success: true, entries: [] };
 
-    const users = await User.find().lean();
-    const userMap = users.reduce((acc, user) => {
-      acc[user._id.toString()] = user.name;
+    const users = await User.find({ messId: user.messId }).lean();
+    const userMap = users.reduce((acc, u) => {
+      acc[u._id.toString()] = u.name;
       return acc;
     }, {} as Record<string, string>);
 

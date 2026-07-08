@@ -12,7 +12,9 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
+    setTimeout(() => {
+      setIsClient(true);
+    }, 0);
   }, []);
 
   useEffect(() => {

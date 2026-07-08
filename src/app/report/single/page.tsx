@@ -19,14 +19,17 @@ export default function SingleReportPage() {
   
   useEffect(() => {
     const fetchData = async () => {
-      const res = await getDashboardData();
+      if (!mongoUser?._id) return;
+      const res = await getDashboardData(mongoUser._id);
       if (res.success) {
         setData(res);
       }
       setLoading(false);
     };
-    fetchData();
-  }, []);
+    if (mongoUser) {
+      fetchData();
+    }
+  }, [mongoUser]);
 
   const handleRemoveMember = async (member: any) => {
     if (member.totalMeal > 0 || member.deposit > 0 || member.singleCost > 0 || (member.jointCost || 0) > 0) {
@@ -46,7 +49,7 @@ export default function SingleReportPage() {
         toast.success(`${member.name}-কে সফলভাবে রিমুভ করা হয়েছে।`);
         // Refresh data
         setLoading(true);
-        const newData = await getDashboardData();
+        const newData = await getDashboardData(mongoUser._id);
         if (newData.success) setData(newData);
         setLoading(false);
       } else {

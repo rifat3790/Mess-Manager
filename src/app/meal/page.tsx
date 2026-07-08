@@ -19,14 +19,17 @@ export default function MealPage() {
   const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
-    fetchInitialData();
-  }, []);
+    if (mongoUser) {
+      fetchInitialData();
+    }
+  }, [mongoUser]);
 
   const fetchInitialData = async () => {
+    if (!mongoUser) return;
     try {
       const [monthRes, membersRes] = await Promise.all([
-        getActiveMonth(),
-        getMembers()
+        getActiveMonth(mongoUser._id),
+        getMembers(mongoUser._id)
       ]);
 
       if (monthRes.success) setActiveMonth(monthRes.month);

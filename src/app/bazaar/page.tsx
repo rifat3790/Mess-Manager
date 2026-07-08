@@ -22,15 +22,12 @@ export default function ManageBazaarPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
+    if (!mongoUser) return;
     try {
       const [schedRes, memRes] = await Promise.all([
-        getBazaarSchedules(),
-        getMembers()
+        getBazaarSchedules(mongoUser._id),
+        getMembers(mongoUser._id)
       ]);
       if (schedRes.success) setSchedules(schedRes.schedules || []);
       if (memRes.success) {
@@ -46,6 +43,12 @@ export default function ManageBazaarPage() {
     }
   };
 
+  useEffect(() => {
+    if (mongoUser) {
+      fetchData();
+    }
+  }, [mongoUser]);
+
   const isManagerOrAdmin = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
   const handleAssign = async (e: React.FormEvent) => {
@@ -60,7 +63,7 @@ export default function ManageBazaarPage() {
     setError('');
 
     try {
-      const res = await assignBazaarSchedule(userId, new Date(fromDate), new Date(toDate));
+      const res = await assignBazaarSchedule(userId, new Date(fromDate), new Date(toDate), mongoUser?._id || '');
       if (res.success) {
         setMessage('শিডিউল সফলভাবে অ্যাসাইন করা হয়েছে!');
         fetchData(); // Reload list

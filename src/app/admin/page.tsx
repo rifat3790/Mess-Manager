@@ -19,25 +19,21 @@ import { getSettings, updateSettings } from '../actions/settingsActions';
 import { getDatabaseStats } from '../actions/adminActions';
 
 export default function AdminPage() {
-  const { user, mongoUser } = useAuth();
+  const { user, mongoUser, loading: authLoading } = useAuth();
   const [settings, setSettings] = useState<any>(null);
   const [dbStats, setDbStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  async function fetchData() {
+  async function fetchData(userId: string) {
     setLoading(true);
     const [settingsRes, statsRes] = await Promise.all([
-      getSettings(),
+      getSettings(userId),
       getDatabaseStats()
     ]);
 
-    if (settingsRes.success) {
+    if (settingsRes.success && settingsRes.settings) {
       setSettings(settingsRes.settings.visibleTabs);
     }
     if (statsRes.success) {
@@ -47,6 +43,12 @@ export default function AdminPage() {
     setStatsLoading(false);
   }
 
+  useEffect(() => {
+    if (mongoUser?._id) {
+      fetchData(mongoUser._id);
+    }
+  }, [mongoUser]);
+
   const toggleTab = (key: string) => {
     setSettings((prev: any) => ({
       ...prev,
@@ -55,8 +57,9 @@ export default function AdminPage() {
   };
 
   const saveSettings = async () => {
+    if (!mongoUser?._id) return;
     setSaving(true);
-    const res = await updateSettings(settings);
+    const res = await updateSettings(settings, mongoUser._id);
     if (res.success) {
       alert("সেটিংস সেভ হয়েছে!");
     } else {
@@ -73,7 +76,7 @@ export default function AdminPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  if (loading) {
+  if (authLoading || (loading && !settings)) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />

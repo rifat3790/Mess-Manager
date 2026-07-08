@@ -22,18 +22,22 @@ export default function ManageMonthPage() {
 
   useEffect(() => {
     async function fetchMonths() {
-      const res = await getAllMonths();
+      if (!mongoUser?._id) return;
+      const res = await getAllMonths(mongoUser._id);
       if (res.success) {
         setMonths(res.months);
       }
       setLoading(false);
     }
-    fetchMonths();
-  }, []);
+    if (mongoUser) {
+      fetchMonths();
+    }
+  }, [mongoUser]);
 
   const handleActivate = async (id: string) => {
+    if (!mongoUser) return;
     setUpdatingId(id);
-    const res = await setActiveMonth(id);
+    const res = await setActiveMonth(id, mongoUser._id);
     if (res.success) {
       setMonths(months.map(m => ({ ...m, isActive: m._id === id })));
       alert('চলমান মাস পরিবর্তন করা হয়েছে!');

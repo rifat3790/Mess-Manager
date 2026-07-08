@@ -5,6 +5,7 @@ export interface IMonth extends Document {
   startDate: Date;
   endDate?: Date;
   isActive: boolean;
+  messId: mongoose.Types.ObjectId;
   totalMeals: number;
   totalMealCost: number;
   totalJointCost: number;
@@ -19,6 +20,7 @@ const MonthSchema: Schema = new Schema({
   startDate: { type: Date, required: true },
   endDate: { type: Date },
   isActive: { type: Boolean, default: true },
+  messId: { type: Schema.Types.ObjectId, ref: 'Mess', required: true, index: true },
   totalMeals: { type: Number, default: 0 },
   totalMealCost: { type: Number, default: 0 },
   totalJointCost: { type: Number, default: 0 },

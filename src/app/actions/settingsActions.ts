@@ -1,7 +1,6 @@
 "use server";
 
 import connectToDatabase from "@/lib/mongoose";
-import Settings from "@/models/Settings";
 import Month from "@/models/Month";
 import Meal from "@/models/Meal";
 import Expense from "@/models/Expense";
@@ -9,58 +8,101 @@ import Deposit from "@/models/Deposit";
 import User from "@/models/User";
 import BazaarSchedule from "@/models/BazaarSchedule";
 import Notification from "@/models/Notification";
+import Mess from "@/models/Mess";
+import Notice from "@/models/Notice";
+import BazaarChecklist from "@/models/BazaarChecklist";
+import ChatMessage from "@/models/ChatMessage";
+import MealRequest from "@/models/MealRequest";
+import mongoose from "mongoose";
 
-export async function getSettings() {
+export async function getSettings(userId: string) {
   try {
     await connectToDatabase();
-    let settings = await Settings.findOne();
-    if (!settings) {
-      settings = await Settings.create({});
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) {
+      return { success: false, error: "Mess not found." };
     }
-    return { success: true, settings: JSON.parse(JSON.stringify(settings)) };
+    
+    const mess = await Mess.findById(user.messId).lean();
+    if (!mess) {
+      return { success: false, error: "Mess not found." };
+    }
+
+    const settings = {
+      visibleTabs: mess.visibleTabs,
+      messName: mess.name,
+      code: mess.code
+    };
+    
+    return { success: true, settings };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-export async function updateSettings(updates: any) {
+export async function updateSettings(updates: any, adminUserId: string) {
   try {
     await connectToDatabase();
-    let settings = await Settings.findOne();
-    if (!settings) {
-      settings = new Settings();
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager') || !admin.messId) {
+      return { success: false, error: 'Unauthorized.' };
     }
+
+    const mess = await Mess.findById(admin.messId);
+    if (!mess) {
+      return { success: false, error: 'Mess not found.' };
+    }
+
     if (updates.visibleTabs !== undefined) {
-      settings.visibleTabs = { ...settings.visibleTabs, ...updates.visibleTabs };
+      mess.visibleTabs = { ...mess.visibleTabs, ...updates.visibleTabs };
     }
     if (updates.messName !== undefined) {
-      settings.messName = updates.messName;
+      mess.name = updates.messName;
     }
-    await settings.save();
+    await mess.save();
+
+    const settings = {
+      visibleTabs: mess.visibleTabs,
+      messName: mess.name,
+      code: mess.code
+    };
+
     return { success: true, settings: JSON.parse(JSON.stringify(settings)) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-export async function deleteEntireMess(confirmText: string) {
+export async function deleteEntireMess(confirmText: string, adminUserId: string) {
   if (confirmText !== "DELETE MESS") {
     return { success: false, error: "Confirmation text did not match." };
   }
 
   try {
     await connectToDatabase();
-    
-    // Delete all collections
+    const admin = await User.findById(adminUserId);
+    if (!admin || admin.role !== 'Super Admin' || !admin.messId) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const messId = admin.messId;
+
+    const months = await Month.find({ messId }).select('_id').lean();
+    const monthIds = months.map(m => m._id);
+
     await Promise.all([
-      Month.deleteMany({}),
-      Meal.deleteMany({}),
-      Expense.deleteMany({}),
-      Deposit.deleteMany({}),
-      User.deleteMany({ role: { $ne: 'Super Admin' } }), // Keep Super Admin to allow recreation
-      BazaarSchedule.deleteMany({}),
-      Notification.deleteMany({}),
-      Settings.deleteMany({})
+      Month.deleteMany({ messId }),
+      Meal.deleteMany({ monthId: { $in: monthIds } }),
+      Expense.deleteMany({ monthId: { $in: monthIds } }),
+      Deposit.deleteMany({ monthId: { $in: monthIds } }),
+      BazaarSchedule.deleteMany({ monthId: { $in: monthIds } }),
+      MealRequest.deleteMany({ monthId: { $in: monthIds } }),
+      Notice.deleteMany({ messId }),
+      BazaarChecklist.deleteMany({ messId }),
+      ChatMessage.deleteMany({ messId }),
+      Notification.deleteMany({ messId }),
+      User.updateMany({ messId }, { $unset: { messId: "" }, $set: { role: 'Pending' } }),
+      Mess.findByIdAndDelete(messId)
     ]);
 
     return { success: true };

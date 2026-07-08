@@ -6,6 +6,7 @@ export interface IUser extends Document {
   email: string;
   role: 'Super Admin' | 'Manager' | 'Member' | 'Pending';
   photoURL?: string;
+  messId?: mongoose.Types.ObjectId;
   lastGroupChatRead?: Date;
   permissions?: {
     canManageMeals: boolean;
@@ -23,6 +24,7 @@ const UserSchema: Schema = new Schema({
   email: { type: String, required: true, unique: true },
   role: { type: String, enum: ['Super Admin', 'Manager', 'Member', 'Pending'], default: 'Pending' },
   photoURL: { type: String },
+  messId: { type: Schema.Types.ObjectId, ref: 'Mess', index: true },
   lastGroupChatRead: { type: Date, default: Date.now },
   permissions: {
     canManageMeals: { type: Boolean, default: false },

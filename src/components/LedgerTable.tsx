@@ -22,11 +22,12 @@ export function LedgerTable() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [mongoUser]);
 
   async function fetchData() {
+    if (!mongoUser) return;
     setLoading(true);
-    const res = await getLedgerData();
+    const res = await getLedgerData(mongoUser._id);
     if (res.success) {
       setEntries(res.entries);
     }

@@ -5,10 +5,14 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
 import ChatBubble from '@/components/layout/ChatBubble';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import { MessSetup } from '@/components/layout/MessSetup';
+import { Loader2 } from 'lucide-react';
 
 export function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const { mongoUser, loading } = useAuth();
 
   const isAuthRoute = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password';
 
@@ -18,6 +22,18 @@ export function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
         {children}
       </main>
     );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-slate-900 to-emerald-900 flex items-center justify-center text-white">
+        <Loader2 className="w-10 h-10 animate-spin text-emerald-400" />
+      </div>
+    );
+  }
+
+  if (mongoUser && (!mongoUser.messId || mongoUser.role === 'Pending')) {
+    return <MessSetup />;
   }
 
   return (
