@@ -872,6 +872,10 @@ export default function Home() {
     const memberPercent = totalUsersCount > 0 ? (membersCount / totalUsersCount) * 100 : 0;
     const pendingPercent = totalUsersCount > 0 ? (pendingCount / totalUsersCount) * 100 : 0;
 
+    const totalFirebaseUsedBytes = storageFiles.reduce((acc: number, f: any) => acc + (f.size || 0), 0);
+    const firebaseFreeSpaceBytes = Math.max(5 * 1024 * 1024 * 1024 - totalFirebaseUsedBytes, 0);
+    const firebasePercentUsed = ((totalFirebaseUsedBytes / (5 * 1024 * 1024 * 1024)) * 100).toFixed(4);
+
     return (
       <div className="w-full space-y-8 pb-16">
         {/* Elegant Header */}
@@ -996,7 +1000,7 @@ export default function Home() {
         </div>
 
         {/* Database Stats & Diagnostics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* DB details */}
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
@@ -1026,6 +1030,67 @@ export default function Home() {
                 <span className="text-lg font-black text-slate-850 mt-1">
                   {superAdminData?.dbStats?.totalUsedBytes ? (superAdminData.dbStats.totalUsedBytes / (1024 * 1024)).toFixed(2) : '0.00'} MB
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Firebase Storage Details */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+              <h3 className="text-sm font-bold text-slate-800">ক্লাউড ফাইল স্টোরেজ মেট্রিক্স (Firebase)</h3>
+              <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-600 text-[10px] font-bold rounded-full">
+                সক্রিয়
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">মোট ফাইল সংখ্যা</span>
+                <span className="text-lg font-black text-slate-800 mt-1">{storageFiles.length} টি</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">মোট সীমা (Limit)</span>
+                <span className="text-lg font-black text-slate-800 mt-1">৫.০০ GB</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">অবশিষ্ট স্পেস</span>
+                <span className="text-lg font-black text-slate-850 mt-1 truncate" title={
+                  firebaseFreeSpaceBytes > 1024 * 1024 * 1024 
+                    ? `${(firebaseFreeSpaceBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+                    : `${(firebaseFreeSpaceBytes / (1024 * 1024)).toFixed(1)} MB`
+                }>
+                  {firebaseFreeSpaceBytes > 1024 * 1024 * 1024 
+                    ? `${(firebaseFreeSpaceBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+                    : `${(firebaseFreeSpaceBytes / (1024 * 1024)).toFixed(1)} MB`
+                  }
+                </span>
+              </div>
+              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ব্যবহৃত স্পেস</span>
+                <span className="text-lg font-black text-slate-850 mt-1 truncate" title={
+                  totalFirebaseUsedBytes > 1024 * 1024 
+                    ? `${(totalFirebaseUsedBytes / (1024 * 1024)).toFixed(2)} MB`
+                    : `${(totalFirebaseUsedBytes / 1024).toFixed(1)} KB`
+                }>
+                  {totalFirebaseUsedBytes > 1024 * 1024 
+                    ? `${(totalFirebaseUsedBytes / (1024 * 1024)).toFixed(2)} MB`
+                    : `${(totalFirebaseUsedBytes / 1024).toFixed(1)} KB`
+                  }
+                </span>
+              </div>
+            </div>
+
+            {/* Storage Progress bar */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex justify-between items-center text-[10px] font-bold text-slate-400">
+                <span>স্টোরেজ ব্যবহারের হার</span>
+                <span>{firebasePercentUsed}%</span>
+              </div>
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="bg-blue-500 h-full rounded-full transition-all duration-500" 
+                  style={{ width: `${Math.min(parseFloat(firebasePercentUsed), 100)}%` }} 
+                />
               </div>
             </div>
           </div>
@@ -1169,124 +1234,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Firebase Cloud Storage Asset Manager */}
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-            <div>
-              <div className="flex items-center gap-2">
-                <Cloud className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-base font-extrabold text-slate-800">Firebase ক্লাউড স্টোরেজ হাব</h3>
-              </div>
-              <p className="text-xs text-slate-400 font-bold mt-0.5">সিস্টেম ফাইল, ব্যাকআপ, এবং ইউজার রিসিট/ডকুমেন্টস ক্লাউড স্টোরেজ ভিউয়ার</p>
-            </div>
-            
-            {/* Upload Button */}
-            <div>
-              <label className={cn(
-                "flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black transition-all cursor-pointer shadow-sm hover:-translate-y-0.5",
-                uploading 
-                  ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
-                  : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100 hover:shadow-md"
-              )}>
-                <Upload className="w-4.5 h-4.5" />
-                {uploading ? `আপলোড হচ্ছে (${uploadProgress}%)` : "নতুন ফাইল আপলোড করুন"}
-                <input
-                  type="file"
-                  disabled={uploading}
-                  onChange={handleUploadFile}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
-
-          {/* Upload Progress Bar */}
-          {uploading && uploadProgress !== null && (
-            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden animate-pulse">
-              <div 
-                className="bg-indigo-600 h-full rounded-full transition-all duration-300"
-                style={{ width: `${uploadProgress}%` }}
-              />
-            </div>
-          )}
-
-          {/* Files List Table */}
-          {storageLoading ? (
-            <div className="flex flex-col items-center justify-center py-10">
-              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-2" />
-              <p className="text-xs text-slate-400 font-bold">ক্লাউড ফাইল সমূহ লোড হচ্ছে...</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                    <th className="px-4 py-3">ফাইল নাম</th>
-                    <th className="px-4 py-3">টাইপ / ফরম্যাট</th>
-                    <th className="px-4 py-3 text-center">সাইজ</th>
-                    <th className="px-4 py-3">আপলোড ডেট</th>
-                    <th className="px-4 py-3 text-right">অ্যাকশন</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {storageFiles.map((file) => (
-                    <tr key={file.fullPath} className="hover:bg-slate-50/50 transition-colors text-xs">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center font-bold">
-                            <Folder className="w-4.5 h-4.5" />
-                          </div>
-                          <span className="font-bold text-slate-705 truncate max-w-[200px] md:max-w-xs" title={file.name}>
-                            {file.name.substring(file.name.indexOf('_') + 1)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-655 font-bold rounded-md text-[10px] uppercase">
-                          {file.contentType.split('/')[1] || 'Unknown'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center font-semibold text-slate-600">
-                        {file.size > 1024 * 1024 
-                          ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
-                          : `${(file.size / 1024).toFixed(1)} KB`
-                        }
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 font-medium">
-                        {formatSafeDate(file.timeCreated, { day: '2-digit', month: 'long', year: 'numeric' })}
-                      </td>
-                      <td className="px-4 py-3 text-right space-x-2">
-                        <a 
-                          href={file.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center justify-center p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-all"
-                          title="ডাউনলোড বা ওপেন করুন"
-                        >
-                          <Download className="w-4 h-4" />
-                        </a>
-                        <button
-                          onClick={() => handleDeleteFile(file.fullPath)}
-                          className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all"
-                          title="ডিলিট করুন"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {storageFiles.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-slate-400 font-bold">
-                        কোনো ফাইল পাওয়া যায়নি। সিস্টেম কন্টেন্ট আপলোড করতে উপরের বাটনে ক্লিক করুন।
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
       </div>
     );
   }
