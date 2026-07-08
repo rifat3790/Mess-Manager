@@ -34,11 +34,12 @@ export default function MealPage() {
 
       if (monthRes.success) setActiveMonth(monthRes.month);
       if (membersRes.success) {
-        setMembers(membersRes.users);
+        const activeMembers = (membersRes.users || []).filter((u: any) => u.role !== 'Pending');
+        setMembers(activeMembers);
         
         // Initialize meals data state
         const initialMeals: any = {};
-        membersRes.users.forEach((m: any) => {
+        activeMembers.forEach((m: any) => {
           initialMeals[m._id] = { breakfast: 0, lunch: 0, dinner: 0 };
         });
         setMealsData(initialMeals);

@@ -61,7 +61,7 @@ export default function ChatPage() {
         setManagerMessages(managerRes.messages);
       }
       if (membersRes.success && membersRes.users) {
-        setAllMembers(membersRes.users.filter((m: any) => m._id !== mongoUser._id));
+        setAllMembers(membersRes.users.filter((m: any) => m._id !== mongoUser._id && m.role !== 'Pending'));
       }
     } catch (error) {
       console.error("Error fetching chat data:", error);

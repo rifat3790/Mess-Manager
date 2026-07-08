@@ -31,9 +31,10 @@ export default function ManageBazaarPage() {
       ]);
       if (schedRes.success) setSchedules(schedRes.schedules || []);
       if (memRes.success) {
-        setMembers(memRes.users || []);
-        if (memRes.users && memRes.users.length > 0) {
-          setUserId(memRes.users[0]._id);
+        const activeMembers = (memRes.users || []).filter((u: any) => u.role !== 'Pending');
+        setMembers(activeMembers);
+        if (activeMembers.length > 0) {
+          setUserId(activeMembers[0]._id);
         }
       }
     } catch (err) {

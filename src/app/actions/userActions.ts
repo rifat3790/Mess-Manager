@@ -62,3 +62,29 @@ export async function changeManager(newManagerId: string, adminUserId: string) {
     return { success: false, error: error.message };
   }
 }
+
+export async function rejectJoinRequest(userId: string, adminUserId: string) {
+  try {
+    await connectToDatabase();
+    
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || (admin.role !== 'Super Admin' && admin.role !== 'Manager') || !admin.messId) {
+      return { success: false, error: 'Unauthorized.' };
+    }
+
+    const targetUser = await User.findById(userId).lean();
+    if (!targetUser || targetUser.messId?.toString() !== admin.messId.toString()) {
+      return { success: false, error: 'User is not part of this Mess.' };
+    }
+
+    const user = await User.findByIdAndUpdate(userId, { 
+      $unset: { messId: "" }, 
+      role: 'Pending' 
+    }, { new: true }).lean();
+
+    return { success: true, user: JSON.parse(JSON.stringify(user)) };
+  } catch (error: any) {
+    console.error("Error rejecting join request:", error);
+    return { success: false, error: error.message };
+  }
+}

@@ -376,7 +376,7 @@ export async function getMembers(userId: string) {
 
     const users = await User.find({
       messId: user.messId,
-      role: { $in: ['Member', 'Manager', 'Super Admin'] }
+      role: { $in: ['Member', 'Manager', 'Super Admin', 'Pending'] }
     }).lean();
 
     return { success: true, users: JSON.parse(JSON.stringify(users)) };

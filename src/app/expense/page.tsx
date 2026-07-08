@@ -66,10 +66,11 @@ export default function ExpensePage() {
 
       if (monthRes.success) setActiveMonth(monthRes.month);
       if (membersRes.success) {
-        setMembers(membersRes.users);
-        if (membersRes.users.length > 0) {
-          setUserId(membersRes.users[0]._id);
-          setSharedBetween(membersRes.users.map((m: any) => m._id));
+        const activeMembers = (membersRes.users || []).filter((u: any) => u.role !== 'Pending');
+        setMembers(activeMembers);
+        if (activeMembers.length > 0) {
+          setUserId(activeMembers[0]._id);
+          setSharedBetween(activeMembers.map((m: any) => m._id));
         }
       }
       if (dashboardRes.success && dashboardRes.expenses) {

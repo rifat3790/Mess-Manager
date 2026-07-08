@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth, MongoUser } from '@/context/AuthContext';
 import { Users, CheckCircle, Shield, User as UserIcon, Loader2, Trash2, Key } from 'lucide-react';
-import { updateUserRole } from '@/app/actions/userActions';
+import { updateUserRole, rejectJoinRequest } from '@/app/actions/userActions';
 import { removeMember } from '@/app/actions/dataActions';
 import { updateUserPermissions } from '@/app/actions/adminActions';
 import { toast } from 'react-hot-toast';
@@ -70,6 +70,19 @@ export default function MembersPage() {
     }
   };
 
+  const handleRejectRequest = async (member: MongoUser) => {
+    if (window.confirm(`আপনি কি নিশ্চিত যে আপনি ${member.name}-এর জয়েন রিকোয়েস্ট প্রত্যাখ্যান করতে চান?`)) {
+      if (!mongoUser) return;
+      const res = await rejectJoinRequest(member._id, mongoUser._id);
+      if (res.success) {
+        toast.success(`${member.name}-এর জয়েন রিকোয়েস্ট প্রত্যাখ্যান করা হয়েছে।`);
+        fetchUsers();
+      } else {
+        toast.error('প্রত্যাখ্যান করতে সমস্যা হয়েছে: ' + res.error);
+      }
+    }
+  };
+
   const handleOpenPermsModal = (user: any) => {
     setSelectedUserForPerms(user);
     setPermsState({
@@ -111,8 +124,12 @@ export default function MembersPage() {
   // Only Managers and Super Admins should see the management tools
   const canManage = mongoUser?.role === 'Super Admin' || mongoUser?.role === 'Manager';
 
+  const activeMembers = users.filter(u => u.role !== 'Pending');
+  const pendingRequests = users.filter(u => u.role === 'Pending');
+
   return (
     <div className="w-full space-y-6">
+      {/* Header */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
@@ -125,10 +142,58 @@ export default function MembersPage() {
         </div>
         <div className="text-right">
           <p className="text-sm text-gray-500">মোট মেম্বার</p>
-          <p className="text-2xl font-bold text-gray-900">{users.filter(u => u.role !== 'Pending').length} জন</p>
+          <p className="text-2xl font-bold text-gray-900">{activeMembers.length} জন</p>
         </div>
       </div>
 
+      {/* Pending Requests Section */}
+      {canManage && pendingRequests.length > 0 && (
+        <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-200/60 p-6 rounded-3xl space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-2.5 w-2.5 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+            </span>
+            <div>
+              <h2 className="text-sm font-extrabold text-amber-900">নতুন মেম্বার জয়েনিং রিকোয়েস্ট ({pendingRequests.length} জন অপেক্ষমান)</h2>
+              <p className="text-[10px] text-amber-700/80 font-bold">মেসের ড্যাশবোর্ড এক্সেস দেওয়ার জন্য নিচে থেকে অনুমতি দিন</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pendingRequests.map((req) => (
+              <div key={req._id} className="bg-white border border-amber-100/70 p-4.5 rounded-2xl flex items-center justify-between shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-100 text-amber-700 rounded-xl flex items-center justify-center font-black shadow-sm">
+                    {req.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-slate-800">{req.name}</h3>
+                    <p className="text-[10px] text-slate-400 font-semibold">{req.email}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleRoleChange(req._id, 'Member')}
+                    className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black transition-all hover:scale-102 duration-200 shadow-sm shadow-emerald-100"
+                  >
+                    অ্যাপ্রুভ
+                  </button>
+                  <button
+                    onClick={() => handleRejectRequest(req)}
+                    className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-rose-600 border border-slate-100 rounded-xl text-[10px] font-bold transition-all"
+                  >
+                    বাতিল
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Active Members Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -140,7 +205,7 @@ export default function MembersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {users.map((user) => (
+              {activeMembers.map((user) => (
                 <tr key={user._id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -149,7 +214,7 @@ export default function MembersPage() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">{user.name}</p>
-                        <p className="text-xs text-gray-500">{user.email}</p>
+                        <p className="text-xs text-gray-550">{user.email}</p>
                       </div>
                     </div>
                   </td>
@@ -157,18 +222,9 @@ export default function MembersPage() {
                     {user.role === 'Super Admin' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200"><Shield className="w-3.5 h-3.5" /> সুপার অ্যাডমিন</span>}
                     {user.role === 'Manager' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200"><CheckCircle className="w-3.5 h-3.5" /> ম্যানেজার</span>}
                     {user.role === 'Member' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><UserIcon className="w-3.5 h-3.5" /> মেম্বার</span>}
-                    {user.role === 'Pending' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">অপেক্ষমান</span>}
                   </td>
                   {canManage && (
                     <td className="px-6 py-4 text-right">
-                      {user.role === 'Pending' && (
-                        <button 
-                          onClick={() => handleRoleChange(user._id, 'Member')}
-                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors"
-                        >
-                          অ্যাপ্রুভ করুন
-                        </button>
-                      )}
                       {/* Access Control Button */}
                       {mongoUser.role === 'Manager' && user.role !== 'Manager' && (
                         <button 
@@ -195,7 +251,7 @@ export default function MembersPage() {
                 </tr>
               ))}
               
-              {users.length === 0 && (
+              {activeMembers.length === 0 && (
                 <tr>
                   <td colSpan={3} className="px-6 py-8 text-center text-gray-500">
                     কোনো মেম্বার পাওয়া যায়নি
