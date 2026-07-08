@@ -422,12 +422,18 @@ export default function Home() {
           } else {
             toast.error(res.error || "ডাটা লোড করা যায়নি");
           }
-          await fetchStorageFiles();
         } catch (e: any) {
           toast.error("ত্রুটি ঘটেছে: " + e.message);
         } finally {
           setSuperAdminLoading(false);
           setDataLoading(false);
+        }
+
+        // Fetch storage files in background without blocking the UI loading state
+        try {
+          await fetchStorageFiles();
+        } catch (storageErr) {
+          console.error("Firebase storage list failed:", storageErr);
         }
       }
       fetchSA();
