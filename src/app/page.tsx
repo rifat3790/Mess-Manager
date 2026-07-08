@@ -36,6 +36,10 @@ import {
   Info,
   TrendingUp,
   Trash2,
+  Cloud,
+  Upload,
+  Folder,
+  Download,
   Edit2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -126,6 +130,100 @@ export default function Home() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [popupNotification, setPopupNotification] = useState<any | null>(null);
   const [announcementCountdown, setAnnouncementCountdown] = useState<string>('');
+
+  // Firebase Storage States
+  const [storageFiles, setStorageFiles] = useState<any[]>([]);
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const fetchStorageFiles = async () => {
+    try {
+      setStorageLoading(true);
+      const { storage } = await import('@/lib/firebase');
+      const { ref, listAll, getDownloadURL, getMetadata } = await import('firebase/storage');
+      
+      const storageRef = ref(storage, 'system-assets');
+      const res = await listAll(storageRef);
+      
+      const fileData = await Promise.all(
+        res.items.map(async (item) => {
+          const url = await getDownloadURL(item);
+          let meta: any = {};
+          try {
+            meta = await getMetadata(item);
+          } catch (e) {}
+          return {
+            name: item.name,
+            fullPath: item.fullPath,
+            url,
+            size: meta.size || 0,
+            contentType: meta.contentType || 'unknown',
+            timeCreated: meta.timeCreated ? new Date(meta.timeCreated) : new Date(),
+          };
+        })
+      );
+      
+      setStorageFiles(fileData.sort((a, b) => b.timeCreated.getTime() - a.timeCreated.getTime()));
+    } catch (err) {
+      console.error("Failed to fetch storage files:", err);
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !mongoUser) return;
+    
+    try {
+      setUploading(true);
+      setUploadProgress(0);
+      const { storage } = await import('@/lib/firebase');
+      const { ref, uploadBytesResumable } = await import('firebase/storage');
+      
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileRef = ref(storage, `system-assets/${cleanName}`);
+      const uploadTask = uploadBytesResumable(fileRef, file);
+      
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(Math.round(progress));
+        },
+        (error) => {
+          toast.error("আপলোড ব্যর্থ হয়েছে: " + error.message);
+          setUploading(false);
+          setUploadProgress(null);
+        },
+        async () => {
+          toast.success("ফাইল সফলভাবে আপলোড হয়েছে!");
+          setUploading(false);
+          setUploadProgress(null);
+          fetchStorageFiles();
+        }
+      );
+    } catch (err: any) {
+      toast.error("আপলোড ব্যর্থ হয়েছে: " + err.message);
+      setUploading(false);
+      setUploadProgress(null);
+    }
+  };
+
+  const handleDeleteFile = async (fullPath: string) => {
+    if (!window.confirm("আপনি কি নিশ্চিত যে এই ফাইলটি ক্লাউড স্টোরেজ থেকে ডিলিট করতে চান?")) return;
+    try {
+      const { storage } = await import('@/lib/firebase');
+      const { ref, deleteObject } = await import('firebase/storage');
+      const fileRef = ref(storage, fullPath);
+      await deleteObject(fileRef);
+      toast.success("ফাইলটি সফলভাবে ডিলিট করা হয়েছে।");
+      fetchStorageFiles();
+    } catch (err: any) {
+      toast.error("ডিলিট করতে সমস্যা হয়েছে: " + err.message);
+    }
+  };
 
   // Emergency Contacts state
   const [contacts, setContacts] = useState<any[]>([]);
@@ -324,6 +422,7 @@ export default function Home() {
           } else {
             toast.error(res.error || "ডাটা লোড করা যায়নি");
           }
+          await fetchStorageFiles();
         } catch (e: any) {
           toast.error("ত্রুটি ঘটেছে: " + e.message);
         } finally {
@@ -1060,8 +1159,127 @@ export default function Home() {
                   </tbody>
                 </table>
               </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Firebase Cloud Storage Asset Manager */}
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <Cloud className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-base font-extrabold text-slate-800">Firebase ক্লাউড স্টোরেজ হাব</h3>
+              </div>
+              <p className="text-xs text-slate-400 font-bold mt-0.5">সিস্টেম ফাইল, ব্যাকআপ, এবং ইউজার রিসিট/ডকুমেন্টস ক্লাউড স্টোরেজ ভিউয়ার</p>
+            </div>
+            
+            {/* Upload Button */}
+            <div>
+              <label className={cn(
+                "flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black transition-all cursor-pointer shadow-sm hover:-translate-y-0.5",
+                uploading 
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
+                  : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100 hover:shadow-md"
+              )}>
+                <Upload className="w-4.5 h-4.5" />
+                {uploading ? `আপলোড হচ্ছে (${uploadProgress}%)` : "নতুন ফাইল আপলোড করুন"}
+                <input
+                  type="file"
+                  disabled={uploading}
+                  onChange={handleUploadFile}
+                  className="hidden"
+                />
+              </label>
             </div>
           </div>
+
+          {/* Upload Progress Bar */}
+          {uploading && uploadProgress !== null && (
+            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden animate-pulse">
+              <div 
+                className="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          )}
+
+          {/* Files List Table */}
+          {storageLoading ? (
+            <div className="flex flex-col items-center justify-center py-10">
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-2" />
+              <p className="text-xs text-slate-400 font-bold">ক্লাউড ফাইল সমূহ লোড হচ্ছে...</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <th className="px-4 py-3">ফাইল নাম</th>
+                    <th className="px-4 py-3">টাইপ / ফরম্যাট</th>
+                    <th className="px-4 py-3 text-center">সাইজ</th>
+                    <th className="px-4 py-3">আপলোড ডেট</th>
+                    <th className="px-4 py-3 text-right">অ্যাকশন</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {storageFiles.map((file) => (
+                    <tr key={file.fullPath} className="hover:bg-slate-50/50 transition-colors text-xs">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center font-bold">
+                            <Folder className="w-4.5 h-4.5" />
+                          </div>
+                          <span className="font-bold text-slate-705 truncate max-w-[200px] md:max-w-xs" title={file.name}>
+                            {file.name.substring(file.name.indexOf('_') + 1)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-655 font-bold rounded-md text-[10px] uppercase">
+                          {file.contentType.split('/')[1] || 'Unknown'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-slate-600">
+                        {file.size > 1024 * 1024 
+                          ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
+                          : `${(file.size / 1024).toFixed(1)} KB`
+                        }
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 font-medium">
+                        {formatSafeDate(file.timeCreated, { day: '2-digit', month: 'long', year: 'numeric' })}
+                      </td>
+                      <td className="px-4 py-3 text-right space-x-2">
+                        <a 
+                          href={file.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-all"
+                          title="ডাউনলোড বা ওপেন করুন"
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
+                        <button
+                          onClick={() => handleDeleteFile(file.fullPath)}
+                          className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all"
+                          title="ডিলিট করুন"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {storageFiles.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-10 text-center text-slate-400 font-bold">
+                        কোনো ফাইল পাওয়া যায়নি। সিস্টেম কন্টেন্ট আপলোড করতে উপরের বাটনে ক্লিক করুন।
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     );
