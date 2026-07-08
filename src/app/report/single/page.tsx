@@ -5,11 +5,9 @@ import { FileText, Loader2, Download, Printer, Trash2 } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { getDashboardData, removeMember } from '@/app/actions/dataActions';
 import { cn } from '@/lib/utils';
-import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { LedgerTable } from '@/components/LedgerTable';
 import { toast } from 'react-hot-toast';
-import { replaceOklchInString } from '@/lib/pdfHelper';
 
 export default function SingleReportPage() {
   const { mongoUser } = useAuth();
@@ -60,132 +58,233 @@ export default function SingleReportPage() {
   };
 
   const handleDownloadPDF = async () => {
-    if (!reportRef.current) return;
+    if (!data?.stats) return;
     try {
       setDownloading(true);
-      
-      const scrollPos = window.scrollY;
-      window.scrollTo(0, 0);
 
-      // 1. Clone the node and clean all inline style attributes
-      const originalElement = reportRef.current;
-      const clone = originalElement.cloneNode(true) as HTMLElement;
-      
-      // Copy exact dimensions and styling for rendering
-      clone.style.width = originalElement.offsetWidth + 'px';
-      clone.style.position = 'absolute';
-      clone.style.top = '-9999px';
-      clone.style.left = '-9999px';
-      clone.style.background = '#ffffff';
-      document.body.appendChild(clone);
-
-      const cleanInlineStyles = (element: HTMLElement) => {
-        const styleAttr = element.getAttribute('style');
-        if (styleAttr) {
-          let cleaned = replaceOklchInString(styleAttr);
-          cleaned = cleaned.replace(/oklab\s*\([^)]+\)/gi, 'rgb(79, 70, 229)');
-          element.setAttribute('style', cleaned);
-        }
-        Array.from(element.children).forEach(child => {
-          if (child instanceof HTMLElement) {
-            cleanInlineStyles(child);
-          }
-        });
-      };
-      cleanInlineStyles(clone);
-
-      // 2. Gather all CSS rules from all active stylesheets
-      let allCssText = '';
-      const nodesToDisable: HTMLStyleElement[] = [];
-      const linkTagsToDisable: HTMLLinkElement[] = [];
-
-      for (let i = 0; i < document.styleSheets.length; i++) {
-        const sheet = document.styleSheets[i];
-        try {
-          const rules = sheet.cssRules || sheet.rules;
-          if (rules) {
-            for (let j = 0; j < rules.length; j++) {
-              allCssText += rules[j].cssText + '\n';
-            }
-            if (sheet.ownerNode instanceof HTMLStyleElement) {
-              nodesToDisable.push(sheet.ownerNode);
-            } else if (sheet.ownerNode instanceof HTMLLinkElement) {
-              linkTagsToDisable.push(sheet.ownerNode);
-            }
-          }
-        } catch (e) {
-          // Fallback if CORS blocks direct rule access
-          const ownerNode = sheet.ownerNode;
-          if (ownerNode instanceof HTMLStyleElement) {
-            allCssText += ownerNode.innerHTML + '\n';
-            nodesToDisable.push(ownerNode);
-          } else if (ownerNode instanceof HTMLLinkElement) {
-            try {
-              const href = ownerNode.href;
-              if (href && href.startsWith(window.location.origin)) {
-                const res = await fetch(href);
-                if (res.ok) {
-                  const text = await res.text();
-                  allCssText += text + '\n';
-                }
-              }
-            } catch (err) {}
-            linkTagsToDisable.push(ownerNode);
-          }
-        }
-      }
-
-      // 3. Preprocess gathered styles
-      let processedCss = replaceOklchInString(allCssText);
-      processedCss = processedCss.replace(/oklab\s*\([^)]+\)/gi, 'rgb(79, 70, 229)');
-
-      // 4. Inject temporary style node
-      const tempStyleNode = document.createElement('style');
-      tempStyleNode.id = 'temp-pdf-style-fix';
-      tempStyleNode.innerHTML = processedCss;
-      document.head.appendChild(tempStyleNode);
-
-      // 5. Disable all original styles
-      nodesToDisable.forEach(node => {
-        node.disabled = true;
-      });
-      linkTagsToDisable.forEach(link => {
-        link.disabled = true;
-      });
-
-      // 6. Capture the cleaned clone
-      const canvas = await html2canvas(clone, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      });
-
-      // 7. Cleanup clone and temporary styles, and restore original styles
-      clone.remove();
-      
-      const tempNode = document.getElementById('temp-pdf-style-fix');
-      if (tempNode) {
-        tempNode.remove();
-      }
-
-      nodesToDisable.forEach(node => {
-        node.disabled = false;
-      });
-      linkTagsToDisable.forEach(link => {
-        link.disabled = false;
-      });
-
-      window.scrollTo(0, scrollPos);
-
-      // 8. Generate PDF
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pageWidth = pdf.internal.pageSize.getWidth() || 210;
+      const pageHeight = pdf.internal.pageSize.getHeight() || 297;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      // Top Primary Header Banner
+      pdf.setFillColor(79, 70, 229); // Indigo-600
+      pdf.rect(0, 0, pageWidth, 40, 'F');
+      
+      // Header Title text
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(20);
+      pdf.text("MESS MANAGER REPORT", 15, 18);
+      
+      // Header Subtitle text
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9.5);
+      pdf.text(`Official statement for the month of: ${data.stats.monthName}`, 15, 27);
+      pdf.text(`Date of Issue: ${new Date().toLocaleDateString()}`, pageWidth - 65, 27);
+
+      // Summary Section Header
+      pdf.setTextColor(30, 41, 59); // Slate-800
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(13);
+      pdf.text("MESS SUMMARY", 15, 52);
+      
+      // Summary Box
+      pdf.setDrawColor(226, 232, 240); // Slate-200
+      pdf.setFillColor(248, 250, 252); // Slate-50
+      pdf.roundedRect(15, 57, pageWidth - 30, 25, 3, 3, 'FD');
+      
+      // Summary Items Mapping
+      const summaryItems = [
+        { label: "TOTAL MEALS", val: data.stats.totalMeals.toFixed(2) },
+        { label: "MEAL RATE", val: `${data.stats.mealRate.toFixed(2)} BDT` },
+        { label: "TOTAL DEPOSIT", val: `${data.stats.totalDeposit.toFixed(2)} BDT` },
+        { label: "TOTAL EXPENSE", val: `${data.stats.totalExpense.toFixed(2)} BDT` },
+        { label: "MESS BALANCE", val: `${data.stats.balance.toFixed(2)} BDT` }
+      ];
+      
+      const colWidthSum = (pageWidth - 40) / 5;
+      
+      summaryItems.forEach((item, index) => {
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(100, 116, 139); // Slate-500
+        pdf.text(item.label, 20 + (index * colWidthSum), 65);
+        
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(10.5);
+        
+        if (index === 4) {
+          pdf.setTextColor(data.stats.balance >= 0 ? 16 : 225, data.stats.balance >= 0 ? 124 : 29, data.stats.balance >= 0 ? 65 : 72);
+        } else if (index === 2) {
+          pdf.setTextColor(16, 124, 65); // Emerald-600
+        } else if (index === 3) {
+          pdf.setTextColor(225, 29, 72); // Rose-600
+        } else {
+          pdf.setTextColor(30, 41, 59);
+        }
+        pdf.text(item.val, 20 + (index * colWidthSum), 74);
+      });
+      
+      // Ledger Details Header
+      pdf.setTextColor(30, 41, 59);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(13);
+      pdf.text("MEMBER LEDGER DETAILS", 15, 95);
+      
+      // Table Columns Config
+      const columns = [
+        { header: "MEMBER NAME", width: 45 },
+        { header: "MEALS", width: 18, align: "center" },
+        { header: "MEAL COST", width: 22, align: "right" },
+        { header: "JOINT COST", width: 22, align: "right" },
+        { header: "SINGLE COST", width: 22, align: "right" },
+        { header: "TOTAL COST", width: 22, align: "right" },
+        { header: "DEPOSIT", width: 20, align: "right" },
+        { header: "BALANCE", width: 22, align: "right" }
+      ];
+      
+      let currentY = 101;
+      
+      // Draw Table Header Background
+      pdf.setFillColor(79, 70, 229); // Indigo-600
+      pdf.rect(15, currentY, pageWidth - 30, 8, 'F');
+      
+      // Draw Headers
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(7.5);
+      
+      let headerX = 18;
+      columns.forEach((col) => {
+        if (col.align === "center") {
+          pdf.text(col.header, headerX + col.width / 2, currentY + 5.5, { align: "center" });
+        } else if (col.align === "right") {
+          pdf.text(col.header, headerX + col.width - 2, currentY + 5.5, { align: "right" });
+        } else {
+          pdf.text(col.header, headerX, currentY + 5.5);
+        }
+        headerX += col.width;
+      });
+      
+      currentY += 8;
+      
+      // Draw Table Rows
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8);
+      
+      const activeMembers = data.members.filter((member: any) => member.role !== 'Pending');
+      
+      activeMembers.forEach((member: any, index: number) => {
+        // Alternating row background
+        if (index % 2 === 0) {
+          pdf.setFillColor(248, 250, 252);
+        } else {
+          pdf.setFillColor(255, 255, 255);
+        }
+        pdf.rect(15, currentY, pageWidth - 30, 8.5, 'F');
+        
+        pdf.setDrawColor(241, 245, 249);
+        pdf.line(15, currentY + 8.5, pageWidth - 15, currentY + 8.5);
+        
+        pdf.setTextColor(51, 65, 85);
+        let cellX = 18;
+        
+        // Name
+        const nameVal = member.name.toUpperCase();
+        pdf.setFont("helvetica", "bold");
+        pdf.text(nameVal, cellX, currentY + 5.5);
+        pdf.setFont("helvetica", "normal");
+        
+        // Meals
+        cellX += columns[0].width;
+        pdf.text(member.totalMeal.toFixed(1), cellX + columns[1].width / 2, currentY + 5.5, { align: "center" });
+        
+        // Meal Cost
+        cellX += columns[1].width;
+        pdf.text(member.mealCost.toFixed(2), cellX + columns[2].width - 2, currentY + 5.5, { align: "right" });
+        
+        // Joint Cost
+        cellX += columns[2].width;
+        pdf.text(member.jointCost.toFixed(2), cellX + columns[3].width - 2, currentY + 5.5, { align: "right" });
+        
+        // Single Cost
+        cellX += columns[3].width;
+        pdf.text(member.singleCost.toFixed(2), cellX + columns[4].width - 2, currentY + 5.5, { align: "right" });
+        
+        // Total Cost
+        cellX += columns[4].width;
+        pdf.setFont("helvetica", "bold");
+        pdf.text(member.totalCost.toFixed(2), cellX + columns[5].width - 2, currentY + 5.5, { align: "right" });
+        pdf.setFont("helvetica", "normal");
+        
+        // Deposit
+        cellX += columns[5].width;
+        pdf.setTextColor(16, 124, 65);
+        pdf.text(member.deposit.toFixed(2), cellX + columns[6].width - 2, currentY + 5.5, { align: "right" });
+        pdf.setTextColor(51, 65, 85);
+        
+        // Balance
+        cellX += columns[6].width;
+        const balVal = member.balance;
+        const isPos = balVal >= 0;
+        pdf.setFont("helvetica", "bold");
+        if (isPos) {
+          pdf.setTextColor(16, 124, 65);
+          pdf.text(`+${balVal.toFixed(2)}`, cellX + columns[7].width - 2, currentY + 5.5, { align: "right" });
+        } else {
+          pdf.setTextColor(225, 29, 72);
+          pdf.text(`${balVal.toFixed(2)}`, cellX + columns[7].width - 2, currentY + 5.5, { align: "right" });
+        }
+        pdf.setTextColor(51, 65, 85);
+        pdf.setFont("helvetica", "normal");
+        
+        currentY += 8.5;
+        
+        // Multi-page handling
+        if (currentY > pageHeight - 20) {
+          pdf.addPage();
+          currentY = 15;
+          
+          pdf.setFillColor(79, 70, 229);
+          pdf.rect(15, currentY, pageWidth - 30, 8, 'F');
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(7.5);
+          
+          let hX = 18;
+          columns.forEach((col) => {
+            if (col.align === "center") {
+              pdf.text(col.header, hX + col.width / 2, currentY + 5.5, { align: "center" });
+            } else if (col.align === "right") {
+              pdf.text(col.header, hX + col.width - 2, currentY + 5.5, { align: "right" });
+            } else {
+              pdf.text(col.header, hX, currentY + 5.5);
+            }
+            hX += col.width;
+          });
+          currentY += 8;
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(8);
+        }
+      });
+      
+      // Footer Section
+      currentY += 15;
+      if (currentY > pageHeight - 20) {
+        pdf.addPage();
+        currentY = 20;
+      }
+      
+      pdf.setDrawColor(226, 232, 240);
+      pdf.line(15, currentY, pageWidth - 15, currentY);
+      
+      currentY += 6;
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(148, 163, 184); // Slate-400
+      pdf.text("This is an automatically generated electronic report from Mess Manager Application.", 15, currentY);
+      
       pdf.save(`Mess_Report_${data.stats.monthName}.pdf`);
     } catch (error: any) {
       console.error("Error generating PDF:", error);
