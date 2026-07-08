@@ -75,7 +75,6 @@ export default function Home() {
   // Super Admin States
   const [superAdminData, setSuperAdminData] = useState<any>(null);
   const [superAdminLoading, setSuperAdminLoading] = useState(true);
-  const [superAdminTab, setSuperAdminTab] = useState<'messes' | 'users' | 'db'>('messes');
   const [superAdminSearch, setSuperAdminSearch] = useState('');
   const [myStats, setMyStats] = useState<any>(null);
   const [allMembers, setAllMembers] = useState<any[]>([]);
@@ -758,262 +757,310 @@ export default function Home() {
       u.email.toLowerCase().includes(superAdminSearch.toLowerCase())
     ) || [];
 
+    // Calculate user role distribution
+    const totalUsersCount = superAdminData?.usersCount || 0;
+    const managersCount = superAdminData?.users?.filter((u: any) => u.role === 'Manager').length || 0;
+    const membersCount = superAdminData?.users?.filter((u: any) => u.role === 'Member').length || 0;
+    const pendingCount = superAdminData?.users?.filter((u: any) => u.role === 'Pending').length || 0;
+
+    const managerPercent = totalUsersCount > 0 ? (managersCount / totalUsersCount) * 100 : 0;
+    const memberPercent = totalUsersCount > 0 ? (membersCount / totalUsersCount) * 100 : 0;
+    const pendingPercent = totalUsersCount > 0 ? (pendingCount / totalUsersCount) * 100 : 0;
+
     return (
       <div className="w-full space-y-8 pb-16">
-        {/* Header */}
-        <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-955 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl border border-indigo-950">
-          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-            <Crown className="w-32 h-32 text-indigo-450 animate-pulse" />
+        {/* Elegant Header */}
+        <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none">
+            <Crown className="w-48 h-48 text-indigo-900" />
           </div>
-          <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 text-xs font-bold rounded-full border border-indigo-500/30 uppercase tracking-widest">
-            সুপার অ্যাডমিন প্যানেল
-          </span>
-          <h1 className="text-3xl font-extrabold mt-3 tracking-wide">স্বাগতম, {mongoUser.name}</h1>
-          <p className="text-slate-300 text-sm mt-1">অ্যাপ্লিকেশনের গ্লোবাল মনিটরিং হাব এবং সম্পূর্ণ সিস্টেম এনালাইটিক্স</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-650 text-xs font-bold rounded-full border border-indigo-100/60 uppercase tracking-widest">
+                সুপার অ্যাডমিন প্যানেল
+              </span>
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+            </div>
+            <h1 className="text-3xl font-black bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-700 bg-clip-text text-transparent">
+              স্বাগতম, {mongoUser.name}
+            </h1>
+            <p className="text-slate-500 text-sm font-medium">অ্যাপ্লিকেশনের গ্লোবাল মনিটরিং হাব এবং সম্পূর্ণ সিস্টেম এনালাইটিক্স</p>
+          </div>
+          
+          <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+            <div className="w-12 h-12 bg-white text-indigo-600 rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
+              <Crown className="w-6 h-6 text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 font-bold">লগইন অ্যাকাউন্ট</p>
+              <p className="text-sm font-bold text-slate-800">{mongoUser.email}</p>
+            </div>
+          </div>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
-            <div>
-              <span className="text-xs font-bold text-gray-405 uppercase tracking-wider">মোট মেস সংখ্যা</span>
-              <h2 className="text-3xl font-black text-gray-900 mt-2">{superAdminData?.messesCount || 0} টি</h2>
+          {/* Total Messes Card */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">মোট মেস সংখ্যা</span>
+              <h2 className="text-3xl font-black text-gray-850">{superAdminData?.messesCount || 0} টি</h2>
+              <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                <span>●</span> সক্রিয় মেস সমূহের মোট সংখ্যা
+              </p>
             </div>
             <div className="w-14 h-14 bg-indigo-50 text-indigo-650 rounded-2xl flex items-center justify-center">
               <Sparkles className="w-7 h-7" />
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
-            <div>
-              <span className="text-xs font-bold text-gray-405 uppercase tracking-wider">মোট নিবন্ধিত ইউজার</span>
-              <h2 className="text-3xl font-black text-gray-900 mt-2">{superAdminData?.usersCount || 0} জন</h2>
+          {/* Total Registered Users Card */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">মোট নিবন্ধিত ইউজার</span>
+              <h2 className="text-3xl font-black text-gray-850">{superAdminData?.usersCount || 0} জন</h2>
+              <p className="text-[10px] text-slate-505 font-semibold">
+                ম্যানেজার: {managersCount} | মেম্বার: {membersCount}
+              </p>
             </div>
             <div className="w-14 h-14 bg-emerald-50 text-emerald-650 rounded-2xl flex items-center justify-center">
               <Users className="w-7 h-7" />
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
-            <div>
-              <span className="text-xs font-bold text-gray-405 uppercase tracking-wider">ডাটাবেজ স্টোরেজ ব্যবহৃত</span>
-              <h2 className="text-3xl font-black text-gray-900 mt-2">{superAdminData?.dbStats?.percentUsed ? superAdminData.dbStats.percentUsed : '0.00'}%</h2>
+          {/* Storage Capacity Card */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+            <div className="space-y-1 w-full mr-4">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">ডাটাবেজ স্টোরেজ ব্যবহৃত</span>
+              <h2 className="text-3xl font-black text-gray-855">{superAdminData?.dbStats?.percentUsed || '0.00'}%</h2>
+              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden mt-1">
+                <div 
+                  className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                  style={{ width: `${superAdminData?.dbStats?.percentUsed || 0}%` }}
+                />
+              </div>
             </div>
-            <div className="w-14 h-14 bg-amber-50 text-amber-650 rounded-2xl flex items-center justify-center">
+            <div className="w-14 h-14 bg-amber-50 text-amber-655 rounded-2xl flex items-center justify-center flex-shrink-0">
               <Activity className="w-7 h-7" />
             </div>
           </div>
         </div>
 
-        {/* Content Panel */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-          {/* Navigation Tabs */}
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-6 border-b border-gray-100 bg-gray-50/50">
-            <div className="flex bg-white border border-gray-250 p-1.5 rounded-2xl shadow-sm w-full sm:w-auto">
-              <button
-                onClick={() => { setSuperAdminTab('messes'); setSuperAdminSearch(''); }}
-                className={cn(
-                  "flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200",
-                  superAdminTab === 'messes' ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-gray-500 hover:text-gray-900"
-                )}
-              >
-                মেস তালিকা
-              </button>
-              <button
-                onClick={() => { setSuperAdminTab('users'); setSuperAdminSearch(''); }}
-                className={cn(
-                  "flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200",
-                  superAdminTab === 'users' ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-gray-500 hover:text-gray-900"
-                )}
-              >
-                ইউজার তালিকা
-              </button>
-              <button
-                onClick={() => { setSuperAdminTab('db'); setSuperAdminSearch(''); }}
-                className={cn(
-                  "flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200",
-                  superAdminTab === 'db' ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "text-gray-500 hover:text-gray-900"
-                )}
-              >
-                ডাটাবেজ হেলথ
-              </button>
-            </div>
-
-            {/* Search Bar */}
-            {superAdminTab !== 'db' && (
-              <div className="relative w-full sm:w-80">
-                <Search className="absolute left-4 top-3.5 w-4.5 h-4.5 text-gray-400" />
-                <input
-                  type="text"
-                  value={superAdminSearch}
-                  onChange={(e) => setSuperAdminSearch(e.target.value)}
-                  placeholder={superAdminTab === 'messes' ? "মেসের নাম বা কোড দিয়ে খুঁজুন..." : "মেম্বারের নাম বা ইমেইল দিয়ে খুঁজুন..."}
-                  className="w-full pl-11 pr-4 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all"
-                />
-              </div>
-            )}
+        {/* User Role Distribution Section */}
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-805">ইউজার রোল বন্টন (Role Distribution)</h3>
+            <p className="text-xs text-slate-450 mt-0.5">নিবন্ধিত ব্যবহারকারীদের ভূমিকার অনুপাত</p>
+          </div>
+          
+          <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex">
+            <div 
+              style={{ width: `${managerPercent}%` }} 
+              className="bg-indigo-500 h-full transition-all" 
+              title={`ম্যানেজার: ${managersCount} জন (${managerPercent.toFixed(1)}%)`} 
+            />
+            <div 
+              style={{ width: `${memberPercent}%` }} 
+              className="bg-emerald-500 h-full transition-all" 
+              title={`মেম্বার: ${membersCount} জন (${memberPercent.toFixed(1)}%)`} 
+            />
+            <div 
+              style={{ width: `${pendingPercent}%` }} 
+              className="bg-amber-500 h-full transition-all" 
+              title={`পেন্ডিং: ${pendingCount} জন (${pendingPercent.toFixed(1)}%)`} 
+            />
           </div>
 
-          {/* Tab Contents */}
-          <div className="p-2">
-            {superAdminTab === 'messes' && (
+          <div className="flex flex-wrap gap-4 text-xs font-bold text-slate-600 pt-1">
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 bg-indigo-500 rounded-full" />
+              ম্যানেজার: {managersCount} জন ({managerPercent.toFixed(1)}%)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 bg-emerald-500 rounded-full" />
+              মেম্বার: {membersCount} জন ({memberPercent.toFixed(1)}%)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 bg-amber-500 rounded-full" />
+              পেন্ডিং: {pendingCount} জন ({pendingPercent.toFixed(1)}%)
+            </span>
+          </div>
+        </div>
+
+        {/* Database Stats & Diagnostics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* DB details */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+              <h3 className="text-sm font-bold text-slate-800">ডাটাবেজ হেলথ ও মেট্রিক্স (MongoDB)</h3>
+              <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-600 text-[10px] font-bold rounded-full">
+                সক্রিয়
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ডাটা অবজেক্টস</span>
+                <span className="text-lg font-black text-slate-800 mt-1">{superAdminData?.dbStats?.objectsCount || 0} টি</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">মোট কালেকশনস</span>
+                <span className="text-lg font-black text-slate-800 mt-1">{superAdminData?.dbStats?.collectionsCount || 0} টি</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ইনডেক্স সাইজ</span>
+                <span className="text-lg font-black text-slate-850 mt-1">
+                  {superAdminData?.dbStats?.indexSizeBytes ? (superAdminData.dbStats.indexSizeBytes / 1024).toFixed(1) : '0.0'} KB
+                </span>
+              </div>
+              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ব্যবহৃত স্পেস</span>
+                <span className="text-lg font-black text-slate-850 mt-1">
+                  {superAdminData?.dbStats?.totalUsedBytes ? (superAdminData.dbStats.totalUsedBytes / (1024 * 1024)).toFixed(2) : '0.00'} MB
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Configurations */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+              <h3 className="text-sm font-bold text-slate-800">সিস্টেম কনফিগারেশন ও ডায়াগনস্টিকস</h3>
+              <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-600 text-[10px] font-bold rounded-full">
+                কনফিগারড
+              </span>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                <span>অ্যাপ্লিকেশন স্ট্যাটাস</span>
+                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">রানিং (স্বাভাবিক)</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                <span>নতুন ইউজার রেজিস্ট্রেশন</span>
+                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">উন্মুক্ত</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                <span>রিয়েল-টাইম নোটিফিকেশন</span>
+                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">সক্রিয়</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                <span>মেইল সার্ভিস (SMTP Status)</span>
+                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">অনলাইন</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Global Search and Listings Container */}
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-805">অ্যাপ্লিকেশন মাস্টার ডেটাবেজ</h3>
+              <p className="text-xs text-slate-400 font-bold mt-0.5">সিস্টেমে থাকা সকল মেস ও মেম্বারদের লাইভ ডেটা</p>
+            </div>
+            
+            {/* Real-time search bar */}
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-4 top-3.5 w-4.5 h-4.5 text-slate-400" />
+              <input
+                type="text"
+                value={superAdminSearch}
+                onChange={(e) => setSuperAdminSearch(e.target.value)}
+                placeholder="মেস নাম, কোড, মেম্বার বা ইমেইল দিয়ে খুঁজুন..."
+                className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all bg-slate-50/50"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Messes Column */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="text-xs font-bold text-slate-500">মেস তালিকা ({filteredMesses.length} টি পাওয়া গেছে)</span>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">মেস তথ্য</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">মেম্বার সংখ্যা</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">মেস কোড</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">তৈরি করেছেন (ম্যানেজার)</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">তৈরির তারিখ</th>
+                    <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                      <th className="px-4 py-3">মেস তথ্য</th>
+                      <th className="px-4 py-3 text-center">মেম্বার</th>
+                      <th className="px-4 py-3">কোড</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-slate-100">
                     {filteredMesses.map((m: any) => (
-                      <tr key={m._id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <p className="font-bold text-gray-900">{m.name}</p>
-                          <p className="text-xs text-gray-400 font-semibold">{m._id}</p>
+                      <tr key={m._id} className="hover:bg-slate-50/50 transition-colors text-xs">
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-slate-800">{m.name}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold">ম্যানেজার: {m.creatorId?.name || 'N/A'}</p>
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-black rounded-full border border-indigo-100">
+                        <td className="px-4 py-3 text-center">
+                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-650 font-extrabold rounded-full border border-indigo-100/50">
                             {m.memberCount} জন
                           </span>
                         </td>
-                        <td className="px-6 py-4 font-mono font-bold text-indigo-600 tracking-wider">
+                        <td className="px-4 py-3 font-mono font-bold text-indigo-600">
                           {m.code}
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="font-semibold text-gray-805">{m.creatorId?.name || 'N/A'}</p>
-                          <p className="text-xs text-gray-500">{m.creatorId?.email || ''}</p>
-                        </td>
-                        <td className="px-6 py-4 text-xs text-gray-500 font-semibold">
-                          {formatSafeDate(m.createdAt, { day: '2-digit', month: 'long', year: 'numeric' })}
                         </td>
                       </tr>
                     ))}
                     {filteredMesses.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-gray-450 font-bold text-sm">কোনো মেস পাওয়া যায়নি।</td>
+                        <td colSpan={3} className="px-4 py-8 text-center text-slate-400 font-bold">কোনো মেস পাওয়া যায়নি।</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
 
-            {superAdminTab === 'users' && (
+            {/* Users Column */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="text-xs font-bold text-slate-500">ইউজার তালিকা ({filteredUsers.length} জন পাওয়া গেছে)</span>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">ইউজার তথ্য</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">রোল</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">সংযুক্ত মেস</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">জয়েনিং ডেট</th>
+                    <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                      <th className="px-4 py-3">ইউজার তথ্য</th>
+                      <th className="px-4 py-3">ভূমিকা</th>
+                      <th className="px-4 py-3">মেস</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-slate-100">
                     {filteredUsers.map((u: any) => (
-                      <tr key={u._id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold">
-                              {u.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-bold text-gray-900">{u.name}</p>
-                              <p className="text-xs text-gray-500">{u.email}</p>
-                            </div>
-                          </div>
+                      <tr key={u._id} className="hover:bg-slate-50/50 transition-colors text-xs">
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-slate-805">{u.name}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">{u.email}</p>
                         </td>
-                        <td className="px-6 py-4">
-                          {u.role === 'Super Admin' && <span className="px-2.5 py-1 bg-purple-50 text-purple-750 text-xs font-bold rounded-lg border border-purple-100">সুপার অ্যাডমিন</span>}
-                          {u.role === 'Manager' && <span className="px-2.5 py-1 bg-blue-50 text-blue-750 text-xs font-bold rounded-lg border border-blue-100">ম্যানেজার</span>}
-                          {u.role === 'Member' && <span className="px-2.5 py-1 bg-emerald-50 text-emerald-755 text-xs font-bold rounded-lg border border-emerald-100">মেম্বার</span>}
-                          {u.role === 'Pending' && <span className="px-2.5 py-1 bg-orange-50 text-orange-755 text-xs font-bold rounded-lg border border-orange-100">পেন্ডিং</span>}
+                        <td className="px-4 py-3">
+                          {u.role === 'Super Admin' && <span className="px-2 py-0.5 bg-purple-50 text-purple-600 font-bold rounded-lg border border-purple-100/50">সুপার অ্যাডমিন</span>}
+                          {u.role === 'Manager' && <span className="px-2 py-0.5 bg-blue-50 text-blue-600 font-bold rounded-lg border border-blue-100/50">ম্যানেজার</span>}
+                          {u.role === 'Member' && <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 font-bold rounded-lg border border-emerald-100/50">মেম্বার</span>}
+                          {u.role === 'Pending' && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 font-bold rounded-lg border border-amber-100/50">পেন্ডিং</span>}
                         </td>
-                        <td className="px-6 py-4 font-semibold text-gray-805">
-                          {u.messId?.name ? (
-                            <span className="flex flex-col">
-                              <span>{u.messId.name}</span>
-                              <span className="text-[10px] text-gray-400 font-mono">({u.messId._id})</span>
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 text-xs">কোনো মেসে যুক্ত নেই</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-xs text-gray-500 font-semibold">
-                          {formatSafeDate(u.createdAt, { day: '2-digit', month: 'long', year: 'numeric' })}
+                        <td className="px-4 py-3 font-semibold text-slate-700">
+                          {u.messId?.name || <span className="text-slate-400 font-normal">কোনো মেসে নেই</span>}
                         </td>
                       </tr>
                     ))}
                     {filteredUsers.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-6 py-8 text-center text-gray-455 font-bold text-sm">কোনো ইউজার পাওয়া যায়নি।</td>
+                        <td colSpan={3} className="px-4 py-8 text-center text-slate-400 font-bold">কোনো ইউজার পাওয়া যায়নি।</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-            )}
-
-            {superAdminTab === 'db' && superAdminData?.dbStats && (
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Detailed db storage */}
-                  <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-955 text-white p-6 rounded-3xl border border-slate-800">
-                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest">স্টোরেজ এনালাইটিক্স (MongoDB)</span>
-                    <h2 className="text-3xl font-black mt-3 mb-6">
-                      {(superAdminData.dbStats.totalUsedBytes / (1024 * 1024)).toFixed(2)} MB
-                      <span className="text-xs text-gray-400 font-medium ml-2">ব্যবহৃত (৫১২ MB সর্বোচ্চ সীমা থেকে)</span>
-                    </h2>
-                    
-                    <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden mb-3">
-                      <div 
-                        className="h-full rounded-full bg-emerald-500 transition-all duration-500"
-                        style={{ width: `${superAdminData.dbStats.percentUsed}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-xs text-slate-400 font-bold">
-                      <span>{superAdminData.dbStats.percentUsed}% ব্যবহৃত</span>
-                      <span>বাকি আছে: {((superAdminData.dbStats.freeSpaceBytes) / (1024 * 1024)).toFixed(2)} MB</span>
-                    </div>
-                  </div>
-
-                  {/* MongoDB logical metrics */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-50 border border-gray-150 p-5 rounded-2xl flex flex-col justify-between">
-                      <span className="text-[10px] font-black text-gray-450 uppercase tracking-wider">ডাটা অবজেক্টস</span>
-                      <span className="text-xl font-black text-gray-900 mt-2">{superAdminData.dbStats.objectsCount} টি</span>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-150 p-5 rounded-2xl flex flex-col justify-between">
-                      <span className="text-[10px] font-black text-gray-450 uppercase tracking-wider">মোট কালেকশনস</span>
-                      <span className="text-xl font-black text-gray-900 mt-2">{superAdminData.dbStats.collectionsCount} টি</span>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-150 p-5 rounded-2xl flex flex-col justify-between">
-                      <span className="text-[10px] font-black text-gray-450 uppercase tracking-wider">ইনডেক্স সাইজ</span>
-                      <span className="text-xl font-black text-gray-900 mt-2">{(superAdminData.dbStats.indexSizeBytes / 1024).toFixed(1)} KB</span>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-150 p-5 rounded-2xl flex flex-col justify-between">
-                      <span className="text-[10px] font-black text-gray-450 uppercase tracking-wider">ডাটা সাইজ (Logical)</span>
-                      <span className="text-xl font-black text-gray-900 mt-2">{(superAdminData.dbStats.dataSizeBytes / 1024).toFixed(1)} KB</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Status indicator */}
-                <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 p-5 rounded-3xl flex gap-3 items-start">
-                  <Activity className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-extrabold text-sm text-emerald-900">সিস্টেমের স্বাস্থ্য চমৎকার!</h4>
-                    <p className="text-xs text-emerald-700/90 mt-1 leading-relaxed">
-                      ডাটাবেজ বর্তমানে কোনো প্রকার পারফরম্যান্স ল্যাগ ছাড়াই এবং স্বাভাবিক রিসোর্স কনজাম্পশন রেট সহ অ্যাক্টিভ রয়েছে। কোনো ধরনের রিস্ট্রিকশন বা প্রক্সি ইস্যু সনাক্ত করা যায়নি।
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
