@@ -31,7 +31,6 @@ import { useAuth } from '@/context/AuthContext';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { usePathname } from 'next/navigation';
-import { getSettings } from '@/app/actions/settingsActions';
 
 interface SidebarProps {
   className?: string;
@@ -40,19 +39,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOpen }: SidebarProps) {
-  const { user, mongoUser, loading, messName } = useAuth();
+  const { user, mongoUser, loading, messName, settings: globalSettings } = useAuth();
   const pathname = usePathname();
-  const [settings, setSettings] = useState<any>(null);
-
-  useEffect(() => {
-    async function fetchSettings() {
-      const res = await getSettings();
-      if (res.success) {
-        setSettings(res.settings.visibleTabs);
-      }
-    }
-    fetchSettings();
-  }, []);
+  const settings = globalSettings?.visibleTabs;
 
   const handleLogout = async () => {
     try {
@@ -95,6 +84,7 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
         { name: 'সকল লেনদেন ও হিসাব', icon: Activity, href: '/ledger' },
         { name: 'চলমান মাসের হিসাব', icon: FileText, href: '/report/single' },
         { name: 'সকল মাসের হিসাব', icon: Files, href: '/report/all' },
+        { name: 'মাস পরিবর্তন ও তালিকা', icon: CalendarDays, href: '/month/manage' },
         { name: 'নতুন মাস শুরু করুন', icon: CalendarPlus, href: '/month/new' },
         { name: 'মেস মেম্বার', icon: Users, href: '/members' },
         { name: 'বাজারের তারিখ', icon: CalendarDays, href: '/bazaar' },

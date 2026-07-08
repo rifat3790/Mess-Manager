@@ -23,9 +23,10 @@ interface AuthContextType {
   mongoUser: MongoUser | null;
   loading: boolean;
   messName: string;
+  settings: any | null;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, mongoUser: null, loading: true, messName: "Mohakhali Mess" });
+const AuthContext = createContext<AuthContextType>({ user: null, mongoUser: null, loading: true, messName: "Mohakhali Mess", settings: null });
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -34,14 +35,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [mongoUser, setMongoUser] = useState<MongoUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [messName, setMessName] = useState("Mohakhali Mess");
+  const [settings, setSettings] = useState<any>(null);
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const { getSettings } = await import('@/app/actions/settingsActions');
         const res = await getSettings();
-        if (res.success && res.settings?.messName) {
-          setMessName(res.settings.messName);
+        if (res.success && res.settings) {
+          setSettings(res.settings);
+          if (res.settings.messName) {
+            setMessName(res.settings.messName);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch settings", err);
@@ -93,7 +98,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, mongoUser, loading, messName }}>
+    <AuthContext.Provider value={{ user, mongoUser, loading, messName, settings }}>
       {children}
     </AuthContext.Provider>
   );

@@ -3,6 +3,7 @@
 import connectToDatabase from "@/lib/mongoose";
 import ChatMessage from "@/models/ChatMessage";
 import User from "@/models/User";
+import mongoose from "mongoose";
 
 export async function getGroupMessages() {
   try {

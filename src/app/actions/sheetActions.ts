@@ -8,6 +8,7 @@ import Expense from "@/models/Expense";
 import Deposit from "@/models/Deposit";
 import MealRequest from "@/models/MealRequest";
 import BazaarSchedule from "@/models/BazaarSchedule";
+import Notification from "@/models/Notification";
 
 export async function createNewMonthSheet(monthName: string, startDate: Date, carryOverBalance: boolean = false) {
   try {
@@ -95,8 +96,11 @@ export async function createNewMonthSheet(monthName: string, startDate: Date, ca
         Expense.deleteMany({ monthId: { $in: monthIdsToDelete } }),
         Deposit.deleteMany({ monthId: { $in: monthIdsToDelete } }),
         MealRequest.deleteMany({ monthId: { $in: monthIdsToDelete } }),
-        BazaarSchedule.deleteMany({ monthId: { $in: monthIdsToDelete } })
+        BazaarSchedule.deleteMany({ monthId: { $in: monthIdsToDelete } }),
+        Notification.deleteMany({ createdAt: { $lt: new Date(startDate) } })
       ]);
+    } else {
+      await Notification.deleteMany({ createdAt: { $lt: new Date(startDate) } });
     }
 
     return { success: true, month: JSON.parse(JSON.stringify(newMonth)) };

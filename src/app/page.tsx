@@ -56,7 +56,8 @@ import {
   createNotice,
   checkAndNotifyLowBalance,
   submitMenuRating,
-  getMenuRatings
+  getMenuRatings,
+  getUnifiedDashboardData
 } from './actions/dataActions';
 import { getBazaarSchedules, getBazaarChecklist, addBazaarChecklistItem, toggleBazaarChecklistItem, deleteBazaarChecklistItem } from './actions/bazaarActions';
 import { getNotifications } from './actions/notificationActions';
@@ -184,56 +185,38 @@ export default function Home() {
   const canManageNotices = isManagerOrAdmin || mongoUser?.permissions?.canManageNotices;
   const canManageBazaar = isManagerOrAdmin || mongoUser?.permissions?.canManageBazaar;
 
-  async function fetchDashboardData() {
+  async function fetchUnifiedData() {
     if (!user || !mongoUser || mongoUser.role === 'Pending') {
       setDataLoading(false);
       return;
     }
-    
+
     try {
-      const [res, scheduleRes, notificationRes, contactsRes, checklistRes] = await Promise.all([
-        getDashboardData(),
-        getBazaarSchedules(),
-        getNotifications(mongoUser._id),
-        getContacts(),
-        getBazaarChecklist()
-      ]);
-
-      if (scheduleRes.success) {
-        setBazaarSchedules(scheduleRes.schedules || []);
-      }
-
-      if (notificationRes.success) {
-        setNotifications(notificationRes.notifications || []);
-      }
-
-      if (contactsRes.success) {
-        setContacts(contactsRes.contacts || []);
-      }
-
-      if (checklistRes.success) {
-        setBazaarChecklist(checklistRes.items || []);
-      }
-
+      const res = await getUnifiedDashboardData(mongoUser._id);
       if (res.success) {
+        // Cache data for instant local load times
         try {
           const currentCache = JSON.parse(localStorage.getItem('mess_dashboard_cache_v2') || '{}');
           localStorage.setItem('mess_dashboard_cache_v2', JSON.stringify({
             ...currentCache,
-            globalStats: res.stats,
-            myStats: (res.members && res.members.find((m) => m._id === mongoUser._id)) || { totalMeal: 0, deposit: 0, totalCost: 0, balance: 0 },
-            allMembers: res.members || [],
-            bazaarSchedules: scheduleRes.schedules || [],
-            notifications: notificationRes.notifications || [],
-            contacts: contactsRes.contacts || [],
-            bazaarChecklist: checklistRes.items || []
+            globalStats: res.dashboard?.stats || null,
+            myStats: (res.dashboard?.members && res.dashboard.members.find((m: any) => m._id === mongoUser._id)) || { totalMeal: 0, deposit: 0, totalCost: 0, balance: 0 },
+            allMembers: res.dashboard?.members || [],
+            bazaarSchedules: res.bazaarSchedules || [],
+            notifications: res.notifications || [],
+            contacts: res.contacts || [],
+            bazaarChecklist: res.bazaarChecklist || [],
+            menu: res.menu || null,
+            notices: res.notices || []
           }));
         } catch (e) {}
-        if (res.stats) {
-          setGlobalStats(res.stats);
-          setCustomMealRate(res.stats.mealRate ? res.stats.mealRate.toFixed(2) : '40.00');
-          setAllMembers(res.members || []);
-          const me = res.members.find((m: any) => m._id === mongoUser._id);
+
+        // Set state from unified result
+        if (res.dashboard?.stats) {
+          setGlobalStats(res.dashboard.stats);
+          setCustomMealRate(res.dashboard.stats.mealRate ? res.dashboard.stats.mealRate.toFixed(2) : '40.00');
+          setAllMembers(res.dashboard.members || []);
+          const me = res.dashboard.members.find((m: any) => m._id === mongoUser._id);
           if (me) {
             setMyStats(me);
             if (me.balance <= 0) {
@@ -260,71 +243,70 @@ export default function Home() {
           setMyStats({ totalMeal: 0, deposit: 0, totalCost: 0, balance: 0 });
           setAllMembers([]);
         }
+
+        if (res.bazaarSchedules) {
+          setBazaarSchedules(res.bazaarSchedules);
+        }
+        if (res.notifications) {
+          setNotifications(res.notifications);
+        }
+        if (res.contacts) {
+          setContacts(res.contacts);
+        }
+        if (res.bazaarChecklist) {
+          setBazaarChecklist(res.bazaarChecklist);
+        }
+        if (res.userMeals) {
+          setMyMeals({
+            today: res.userMeals.today,
+            tomorrow: res.userMeals.tomorrow,
+            pendingToday: res.userMeals.pendingToday,
+            pendingTomorrow: res.userMeals.pendingTomorrow
+          });
+        }
+        if (res.pendingRequests) {
+          setPendingRequests(res.pendingRequests);
+        }
+        if (res.menu) {
+          setMenu(res.menu);
+          setMenuBreakfast(res.menu.breakfast || '');
+          setMenuLunch(res.menu.lunch || '');
+          setMenuDinner(res.menu.dinner || '');
+        }
+        if (res.notices) {
+          setNotices(res.notices);
+        }
+        if (res.ratings) {
+          setMenuAverages(res.ratings.averages || { breakfast: 0, lunch: 0, dinner: 0, totalCount: 0 });
+          setAllMenuRatings(res.ratings.allRatings || []);
+          if (res.ratings.userRating) {
+            setBreakfastRating(res.ratings.userRating.breakfast || 0);
+            setLunchRating(res.ratings.userRating.lunch || 0);
+            setDinnerRating(res.ratings.userRating.dinner || 0);
+          }
+        }
       }
-    } catch (err: any) {
-      console.error("Error fetching dashboard data:", err);
+    } catch (err) {
+      console.error("Unified fetch error:", err);
     } finally {
       setDataLoading(false);
     }
   }
 
+  async function fetchDashboardData() {
+    await fetchUnifiedData();
+  }
+
   async function fetchUserMeals() {
-    if (mongoUser && mongoUser.role !== 'Pending') {
-      const res = await getUserMealStatusForTodayAndTomorrow(mongoUser._id);
-      if (res.success) {
-        setMyMeals({
-          today: res.today,
-          tomorrow: res.tomorrow,
-          pendingToday: res.pendingToday,
-          pendingTomorrow: res.pendingTomorrow
-        });
-      }
-    }
+    await fetchUnifiedData();
   }
 
   async function fetchPendingRequests() {
-    if (mongoUser && canManageMeals) {
-      const res = await getPendingMealRequests();
-      if (res.success) {
-        setPendingRequests(res.requests || []);
-      }
-    }
+    await fetchUnifiedData();
   }
 
   async function fetchMenuAndNotices() {
-    if (mongoUser && mongoUser.role !== 'Pending') {
-      const [menuRes, noticesRes, ratingsRes] = await Promise.all([
-        getTodayMenu(),
-        getLatestNotices(),
-        getMenuRatings(new Date(), mongoUser._id)
-      ]);
-      if (menuRes.success && menuRes.menu) {
-        setMenu(menuRes.menu);
-        setMenuBreakfast(menuRes.menu.breakfast || '');
-        setMenuLunch(menuRes.menu.lunch || '');
-        setMenuDinner(menuRes.menu.dinner || '');
-      }
-      if (noticesRes.success) {
-        setNotices(noticesRes.notices || []);
-      }
-      try {
-        const currentCache = JSON.parse(localStorage.getItem('mess_dashboard_cache_v2') || '{}');
-        localStorage.setItem('mess_dashboard_cache_v2', JSON.stringify({
-          ...currentCache,
-          menu: menuRes.menu || null,
-          notices: noticesRes.notices || []
-        }));
-      } catch (e) {}
-      if (ratingsRes.success) {
-        setMenuAverages(ratingsRes.averages || { breakfast: 0, lunch: 0, dinner: 0, totalCount: 0 });
-        setAllMenuRatings(ratingsRes.allRatings || []);
-        if (ratingsRes.userRating) {
-          setBreakfastRating(ratingsRes.userRating.breakfast || 0);
-          setLunchRating(ratingsRes.userRating.lunch || 0);
-          setDinnerRating(ratingsRes.userRating.dinner || 0);
-        }
-      }
-    }
+    await fetchUnifiedData();
   }
 
   useEffect(() => {
@@ -353,10 +335,7 @@ export default function Home() {
       console.warn("Failed to load stale cache:", e);
     }
 
-    fetchDashboardData();
-    fetchUserMeals();
-    fetchPendingRequests();
-    fetchMenuAndNotices();
+    fetchUnifiedData();
   }, [user, mongoUser]);
 
   // Live countdown for new announcement banner
@@ -386,63 +365,36 @@ export default function Home() {
   useEffect(() => {
     if (!mongoUser || mongoUser.role === 'Pending') return;
     const interval = setInterval(() => {
-      fetchDashboardData();
-      fetchUserMeals();
-      fetchPendingRequests();
-      fetchMenuAndNotices();
+      fetchUnifiedData();
     }, 10000);
     return () => clearInterval(interval);
   }, [mongoUser]);
 
-  // Polling for live notifications (AJAX style real-time updates)
+  // Handle local vibration and popups when notifications update in state
   useEffect(() => {
-    if (!mongoUser || mongoUser.role === 'Pending') return;
-
-    // Helper to fetch notifications and check for new ones
-    const pollNotifications = async (isInitial = false) => {
-      try {
-        const res = await getNotifications(mongoUser._id);
-        if (res.success && res.notifications) {
-          const fetchedList = res.notifications;
-          setNotifications(fetchedList);
-
-          // Get seen IDs from localStorage
-          const seenIdsStr = localStorage.getItem('seenNotifications');
-          const seenIds: string[] = seenIdsStr ? JSON.parse(seenIdsStr) : [];
-
-          if (isInitial) {
-            // Mark all existing notifications as seen on initial load
-            const allIds = fetchedList.map((n: any) => n._id);
-            localStorage.setItem('seenNotifications', JSON.stringify(allIds));
-          } else {
-            // Find new notifications
-            const newNotifs = fetchedList.filter((n: any) => !seenIds.includes(n._id));
-            if (newNotifs.length > 0) {
-              // Trigger vibration
-              if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
-                window.navigator.vibrate([200, 100, 200]);
-              }
-              // Show popup for the latest new notification
-              setPopupNotification(newNotifs[0]);
-
-              // Update seen IDs in localStorage
-              const updatedSeenIds = [...seenIds, ...newNotifs.map((n: any) => n._id)];
-              localStorage.setItem('seenNotifications', JSON.stringify(updatedSeenIds));
-            }
-          }
+    if (!notifications || notifications.length === 0) return;
+    
+    const seenIdsStr = localStorage.getItem('seenNotifications');
+    const seenIds: string[] = seenIdsStr ? JSON.parse(seenIdsStr) : [];
+    
+    // Check if this is the initial mount/load
+    const isFirstLoad = seenIds.length === 0;
+    
+    if (isFirstLoad) {
+      const allIds = notifications.map((n: any) => n._id);
+      localStorage.setItem('seenNotifications', JSON.stringify(allIds));
+    } else {
+      const newNotifs = notifications.filter((n: any) => !seenIds.includes(n._id));
+      if (newNotifs.length > 0) {
+        if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
+          window.navigator.vibrate([200, 100, 200]);
         }
-      } catch (err) {
-        console.error("Polling notifications error:", err);
+        setPopupNotification(newNotifs[0]);
+        const updatedSeenIds = [...seenIds, ...newNotifs.map((n: any) => n._id)];
+        localStorage.setItem('seenNotifications', JSON.stringify(updatedSeenIds));
       }
-    };
-
-    // Initial load already handled in fetchDashboardData, but we setup polling
-    const interval = setInterval(() => {
-      pollNotifications(false);
-    }, 10000); // Poll every 10 seconds
-
-    return () => clearInterval(interval);
-  }, [mongoUser]);
+    }
+  }, [notifications]);
 
   // Initialize draft meals to 0 by default for standard member request input
   useEffect(() => {

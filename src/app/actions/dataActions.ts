@@ -15,6 +15,9 @@ import { revalidatePath } from "next/cache";
 import Notice from "@/models/Notice";
 import Menu from "@/models/Menu";
 import MenuRating from "@/models/MenuRating";
+import { getBazaarSchedules, getBazaarChecklist } from './bazaarActions';
+import { getNotifications } from './notificationActions';
+import { getContacts } from './adminActions';
 
 export async function addMeal(monthId: string, userId: string, date: Date, mealCount: number) {
   try {
@@ -370,14 +373,14 @@ export async function getDashboardData() {
   try {
     await connectToDatabase();
     
-    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 });
+    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 }).lean();
     if (!activeMonth) return { success: true, stats: null, members: [] };
 
-    const users = await User.find({ role: { $ne: 'Pending' } });
+    const users = await User.find({ role: { $ne: 'Pending' } }).lean();
 
-    const meals = await Meal.find({ monthId: activeMonth._id });
-    const expenses = await Expense.find({ monthId: activeMonth._id });
-    const deposits = await Deposit.find({ monthId: activeMonth._id });
+    const meals = await Meal.find({ monthId: activeMonth._id }).lean();
+    const expenses = await Expense.find({ monthId: activeMonth._id }).lean();
+    const deposits = await Deposit.find({ monthId: activeMonth._id }).lean();
 
     const totalMeals = meals.reduce((sum, meal) => sum + meal.mealCount, 0);
     const totalDeposit = deposits.reduce((sum, dep) => sum + dep.amount, 0);
@@ -404,29 +407,64 @@ export async function getDashboardData() {
 
     const numUsers = users.length;
 
-    const memberStats = users.map(user => {
-      const userMeals = meals.filter(m => m.userId?.toString() === user._id.toString()).reduce((sum, m) => sum + m.mealCount, 0);
-      const userDeposit = deposits.filter(d => d.userId?.toString() === user._id.toString()).reduce((sum, d) => sum + d.amount, 0);
-      const userSingleExpense = expenses.filter(e => e.type === 'Single' && e.userId?.toString() === user._id.toString()).reduce((sum, e) => sum + e.amount, 0);
-      
-      // Calculate user's specific joint cost
-      const userJointExpenses = expenses.filter(e => {
-        if (e.type !== 'Joint') return false;
-        if (!e.sharedBetween || e.sharedBetween.length === 0) return true;
-        return e.sharedBetween.some((id: any) => id?.toString() === user._id.toString());
-      });
+    // Group meals by user
+    const userMealMap: Record<string, number> = {};
+    for (const m of meals) {
+      const uid = m.userId?.toString();
+      if (uid) userMealMap[uid] = (userMealMap[uid] || 0) + m.mealCount;
+    }
 
-      const userJointCost = userJointExpenses.reduce((sum, e) => {
-        const count = (!e.sharedBetween || e.sharedBetween.length === 0) ? numUsers : e.sharedBetween.length;
-        return sum + (e.amount / count);
-      }, 0);
+    // Group deposits by user
+    const userDepositMap: Record<string, number> = {};
+    for (const d of deposits) {
+      const uid = d.userId?.toString();
+      if (uid) userDepositMap[uid] = (userDepositMap[uid] || 0) + d.amount;
+    }
+
+    // Group single expenses by user
+    const userSingleExpenseMap: Record<string, number> = {};
+    for (const e of expenses) {
+      if (e.type === 'Single') {
+        const uid = e.userId?.toString();
+        if (uid) userSingleExpenseMap[uid] = (userSingleExpenseMap[uid] || 0) + e.amount;
+      }
+    }
+
+    // Group joint expenses by user
+    const userJointCostMap: Record<string, number> = {};
+    for (const e of expenses) {
+      if (e.type === 'Joint') {
+        const hasSharedBetween = e.sharedBetween && e.sharedBetween.length > 0;
+        const shareCount = hasSharedBetween ? e.sharedBetween.length : numUsers;
+        const shareAmount = e.amount / shareCount;
+
+        if (hasSharedBetween) {
+          for (const id of e.sharedBetween) {
+            const uid = id?.toString();
+            if (uid) userJointCostMap[uid] = (userJointCostMap[uid] || 0) + shareAmount;
+          }
+        } else {
+          for (const u of users) {
+            const uid = u._id.toString();
+            userJointCostMap[uid] = (userJointCostMap[uid] || 0) + shareAmount;
+          }
+        }
+      }
+    }
+
+    const memberStats = users.map(user => {
+      const uid = user._id.toString();
+      const userMeals = userMealMap[uid] || 0;
+      const userDeposit = userDepositMap[uid] || 0;
+      const userSingleExpense = userSingleExpenseMap[uid] || 0;
+      const userJointCost = userJointCostMap[uid] || 0;
 
       const mealCost = userMeals * mealRate;
       const totalCost = mealCost + userJointCost + userSingleExpense;
       const userBalance = userDeposit - totalCost;
 
       return {
-        _id: user._id.toString(),
+        _id: uid,
         name: user.name,
         role: user.role,
         totalMeal: userMeals,
@@ -450,15 +488,15 @@ export async function getAllMonthsReportData() {
   try {
     await connectToDatabase();
     
-    const months = await Month.find().sort({ createdAt: -1 });
-    const users = await User.find({ role: { $ne: 'Pending' } });
+    const months = await Month.find().sort({ createdAt: -1 }).lean();
+    const users = await User.find({ role: { $ne: 'Pending' } }).lean();
     
     const allData = [];
     
     for (const month of months) {
-      const meals = await Meal.find({ monthId: month._id });
-      const expenses = await Expense.find({ monthId: month._id });
-      const deposits = await Deposit.find({ monthId: month._id });
+      const meals = await Meal.find({ monthId: month._id }).lean();
+      const expenses = await Expense.find({ monthId: month._id }).lean();
+      const deposits = await Deposit.find({ monthId: month._id }).lean();
 
       const totalMeals = meals.reduce((sum, meal) => sum + meal.mealCount, 0);
       const totalDeposit = deposits.reduce((sum, dep) => sum + dep.amount, 0);
@@ -484,29 +522,64 @@ export async function getAllMonthsReportData() {
 
       const numUsers = users.length;
 
-      const memberStats = users.map(user => {
-        const userMeals = meals.filter(m => m.userId?.toString() === user._id.toString()).reduce((sum, m) => sum + m.mealCount, 0);
-        const userDeposit = deposits.filter(d => d.userId?.toString() === user._id.toString()).reduce((sum, d) => sum + d.amount, 0);
-        const userSingleExpense = expenses.filter(e => e.type === 'Single' && e.userId?.toString() === user._id.toString()).reduce((sum, e) => sum + e.amount, 0);
-        
-        // Calculate user's specific joint cost
-        const userJointExpenses = expenses.filter(e => {
-          if (e.type !== 'Joint') return false;
-          if (!e.sharedBetween || e.sharedBetween.length === 0) return true;
-          return e.sharedBetween.some((id: any) => id?.toString() === user._id.toString());
-        });
+      // Group meals by user
+      const userMealMap: Record<string, number> = {};
+      for (const m of meals) {
+        const uid = m.userId?.toString();
+        if (uid) userMealMap[uid] = (userMealMap[uid] || 0) + m.mealCount;
+      }
 
-        const userJointCost = userJointExpenses.reduce((sum, e) => {
-          const count = (!e.sharedBetween || e.sharedBetween.length === 0) ? numUsers : e.sharedBetween.length;
-          return sum + (e.amount / count);
-        }, 0);
+      // Group deposits by user
+      const userDepositMap: Record<string, number> = {};
+      for (const d of deposits) {
+        const uid = d.userId?.toString();
+        if (uid) userDepositMap[uid] = (userDepositMap[uid] || 0) + d.amount;
+      }
+
+      // Group single expenses by user
+      const userSingleExpenseMap: Record<string, number> = {};
+      for (const e of expenses) {
+        if (e.type === 'Single') {
+          const uid = e.userId?.toString();
+          if (uid) userSingleExpenseMap[uid] = (userSingleExpenseMap[uid] || 0) + e.amount;
+        }
+      }
+
+      // Group joint expenses by user
+      const userJointCostMap: Record<string, number> = {};
+      for (const e of expenses) {
+        if (e.type === 'Joint') {
+          const hasSharedBetween = e.sharedBetween && e.sharedBetween.length > 0;
+          const shareCount = hasSharedBetween ? e.sharedBetween.length : numUsers;
+          const shareAmount = e.amount / shareCount;
+
+          if (hasSharedBetween) {
+            for (const id of e.sharedBetween) {
+              const uid = id?.toString();
+              if (uid) userJointCostMap[uid] = (userJointCostMap[uid] || 0) + shareAmount;
+            }
+          } else {
+            for (const u of users) {
+              const uid = u._id.toString();
+              userJointCostMap[uid] = (userJointCostMap[uid] || 0) + shareAmount;
+            }
+          }
+        }
+      }
+
+      const memberStats = users.map(user => {
+        const uid = user._id.toString();
+        const userMeals = userMealMap[uid] || 0;
+        const userDeposit = userDepositMap[uid] || 0;
+        const userSingleExpense = userSingleExpenseMap[uid] || 0;
+        const userJointCost = userJointCostMap[uid] || 0;
 
         const mealCost = userMeals * mealRate;
         const totalCost = mealCost + userJointCost + userSingleExpense;
         const userBalance = userDeposit - totalCost;
 
         return {
-          _id: user._id.toString(),
+          _id: uid,
           name: user.name,
           totalMeal: userMeals,
           mealCost,
@@ -1343,6 +1416,72 @@ export async function getMenuRatings(date: Date, requestingUserId?: string) {
       allRatings: JSON.parse(JSON.stringify(ratingsList)) 
     };
   } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getUnifiedDashboardData(userId: string) {
+  try {
+    await connectToDatabase();
+
+    // Fetch active month first (needed for other queries)
+    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 }).lean();
+    if (!activeMonth) {
+      return {
+        success: true,
+        dashboard: { stats: null, members: [] },
+        bazaarSchedules: [],
+        notifications: [],
+        contacts: [],
+        bazaarChecklist: [],
+        userMeals: null,
+        pendingRequests: [],
+        menu: null,
+        notices: [],
+        ratings: null
+      };
+    }
+
+    // Run all other queries concurrently on the server
+    const [
+      dashboardRes,
+      bazaarSchedulesRes,
+      notificationsRes,
+      contactsRes,
+      bazaarChecklistRes,
+      userMealsRes,
+      pendingRequestsRes,
+      menuRes,
+      noticesRes,
+      ratingsRes
+    ] = await Promise.all([
+      getDashboardData(),
+      getBazaarSchedules(),
+      getNotifications(userId),
+      getContacts(),
+      getBazaarChecklist(),
+      getUserMealStatusForTodayAndTomorrow(userId),
+      getPendingMealRequests(),
+      getTodayMenu(),
+      getLatestNotices(),
+      getMenuRatings(new Date(), userId)
+    ]);
+
+    return {
+      success: true,
+      dashboard: dashboardRes.success ? dashboardRes : null,
+      bazaarSchedules: bazaarSchedulesRes.success ? bazaarSchedulesRes.schedules : [],
+      notifications: notificationsRes.success ? notificationsRes.notifications : [],
+      contacts: contactsRes.success ? contactsRes.contacts : [],
+      bazaarChecklist: bazaarChecklistRes.success ? bazaarChecklistRes.items : [],
+      userMeals: userMealsRes.success ? userMealsRes : null,
+      pendingRequests: pendingRequestsRes.success ? pendingRequestsRes.requests : [],
+      menu: menuRes.success ? menuRes.menu : null,
+      notices: noticesRes.success ? noticesRes.notices : [],
+      ratings: ratingsRes.success ? ratingsRes : null
+    };
+  } catch (error: any) {
+    console.error("Unified dashboard fetch error:", error);
     return { success: false, error: error.message };
   }
 }

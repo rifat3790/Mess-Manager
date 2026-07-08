@@ -22,10 +22,6 @@ export async function getNotifications(userId: string) {
 
     if (activeMonth && activeMonth.startDate) {
       query.createdAt = { $gte: new Date(activeMonth.startDate) };
-      // Async background deletion of previous months' notifications to clean database
-      Notification.deleteMany({ createdAt: { $lt: new Date(activeMonth.startDate) } }).catch(err => {
-        console.error("Pruning old notifications failed:", err);
-      });
     }
     
     const notifications = await Notification.find(query).sort({ createdAt: -1 }).limit(20);
