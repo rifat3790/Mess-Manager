@@ -71,8 +71,8 @@ export function MessSetup() {
     }
   };
 
-  // If role is Pending, they are waiting for manager approval
-  if (mongoUser?.role === 'Pending') {
+  // If role is Pending and they joined a mess, they are waiting for manager approval
+  if (mongoUser?.role === 'Pending' && mongoUser?.messId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-slate-900 to-emerald-900 flex items-center justify-center p-4">
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl w-full max-w-md shadow-2xl text-center text-white relative overflow-hidden">

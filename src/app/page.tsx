@@ -797,7 +797,7 @@ export default function Home() {
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
             <div>
               <span className="text-xs font-bold text-gray-405 uppercase tracking-wider">ডাটাবেজ স্টোরেজ ব্যবহৃত</span>
-              <h2 className="text-3xl font-black text-gray-900 mt-2">{superAdminData?.dbStats?.percentUsed ? superAdminData.dbStats.percentUsed.toFixed(2) : '0.00'}%</h2>
+              <h2 className="text-3xl font-black text-gray-900 mt-2">{superAdminData?.dbStats?.percentUsed ? superAdminData.dbStats.percentUsed : '0.00'}%</h2>
             </div>
             <div className="w-14 h-14 bg-amber-50 text-amber-650 rounded-2xl flex items-center justify-center">
               <Activity className="w-7 h-7" />
@@ -976,7 +976,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex justify-between text-xs text-slate-400 font-bold">
-                      <span>{superAdminData.dbStats.percentUsed.toFixed(2)}% ব্যবহৃত</span>
+                      <span>{superAdminData.dbStats.percentUsed}% ব্যবহৃত</span>
                       <span>বাকি আছে: {((superAdminData.dbStats.freeSpaceBytes) / (1024 * 1024)).toFixed(2)} MB</span>
                     </div>
                   </div>
