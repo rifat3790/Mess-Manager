@@ -117,6 +117,7 @@ export default function Home() {
   const [saSelectedRole, setSaSelectedRole] = useState<'Super Admin' | 'Manager' | 'Member' | 'Pending'>('Member');
   const [saRoleLoading, setSaRoleLoading] = useState(false);
   const [saMessLoading, setSaMessLoading] = useState<Record<string, boolean>>({});
+  const [saActiveTab, setSaActiveTab] = useState<'overview' | 'messes' | 'users' | 'broadcast' | 'health'>('overview');
 
   const handleSABroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -977,402 +978,670 @@ export default function Home() {
 
     return (
       <div className="w-full space-y-8 pb-16">
-        {/* VIP Luxury Header Banner */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 text-white p-8 shadow-2xl border border-indigo-800/40">
-          <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
-            <Crown className="w-64 h-64 text-indigo-400 animate-pulse" />
-          </div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="px-3.5 py-1 bg-indigo-500/20 text-indigo-300 text-xs font-black rounded-full border border-indigo-400/30 uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-md">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  VIP Super Admin Command Center
-                </span>
-                <span className="flex h-2.5 w-2.5 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
-              </div>
-              <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-                স্বাগতম VIP, <span className="bg-gradient-to-r from-indigo-300 via-white to-indigo-200 bg-clip-text text-transparent">{mongoUser.name}</span>
-              </h1>
-              <p className="text-indigo-200/80 text-xs sm:text-sm font-medium">অ্যাপ্লিকেশনের লাইভ গ্লোবাল মনিটরিং হাব, ক্যাশফ্লো এবং সম্পূর্ণ সিস্টেম কন্ট্রোল প্যানেল</p>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                onClick={() => setShowBroadcastModal(true)}
-                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-2xl text-xs transition-all flex items-center gap-2 shadow-lg shadow-amber-500/20"
-              >
-                <Megaphone className="w-4 h-4 text-slate-950" />
-                📢 ব্রডকাস্ট নোটিশ
-              </button>
-              <button
-                onClick={() => {
-                  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(superAdminData, null, 2));
-                  const downloadAnchor = document.createElement('a');
-                  downloadAnchor.setAttribute("href", dataStr);
-                  downloadAnchor.setAttribute("download", `system-audit-report-${new Date().toISOString().split('T')[0]}.json`);
-                  document.body.appendChild(downloadAnchor);
-                  downloadAnchor.click();
-                  downloadAnchor.remove();
-                  toast.success("অডিট রিপোর্ট ডাউনলোড হয়েছে!");
-                }}
-                className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-extrabold rounded-2xl text-xs transition-all flex items-center gap-2 backdrop-blur-md border border-white/10"
-              >
-                <Download className="w-4 h-4 text-indigo-300" />
-                অডিট রিপোর্ট
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* System Scale & Cashflow Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {/* Total Messes Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-100 flex items-center justify-between hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
-            <div className="space-y-1">
-              <span className="text-xs font-black text-slate-400 uppercase tracking-wider">মোট মেস সংখ্যা</span>
-              <h2 className="text-3xl font-black text-gray-900">{superAdminData?.messesCount || 0} টি</h2>
-              <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                <span>●</span> {superAdminData?.messes?.filter((m: any) => m.status !== 'Suspended').length || 0} টি মেস সচল
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm">
-              <Building2 className="w-7 h-7" />
-            </div>
-          </div>
-
-          {/* Total Registered Users Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-100 flex items-center justify-between hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
-            <div className="space-y-1">
-              <span className="text-xs font-black text-slate-400 uppercase tracking-wider">মোট নিবন্ধিত ইউজার</span>
-              <h2 className="text-3xl font-black text-gray-900">{superAdminData?.usersCount || 0} জন</h2>
-              <p className="text-[10px] text-indigo-600 font-bold">
-                ম্যানেজার: {managersCount} | মেম্বার: {membersCount}
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-sm">
-              <Users className="w-7 h-7" />
-            </div>
-          </div>
-
-          {/* Platform Total Cashflow Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-100 flex items-center justify-between hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
-            <div className="space-y-1">
-              <span className="text-xs font-black text-slate-400 uppercase tracking-wider">প্ল্যাটফর্ম ক্যাশফ্লো জমা</span>
-              <h2 className="text-2xl font-black text-emerald-600">৳{(superAdminData?.systemTotals?.totalDeposits || 0).toLocaleString()}</h2>
-              <p className="text-[10px] text-emerald-600 font-bold">
-                গ্লোবাল জমা ফ্লো
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-sm">
-              <Coins className="w-7 h-7" />
-            </div>
-          </div>
-
-          {/* Total System Meals Counter */}
-          <div className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-100 flex items-center justify-between hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
-            <div className="space-y-1">
-              <span className="text-xs font-black text-slate-400 uppercase tracking-wider">মোট পরিবেশনকৃত মিল</span>
-              <h2 className="text-2xl font-black text-amber-600">{(superAdminData?.systemTotals?.totalMeals || 0).toLocaleString()} টি</h2>
-              <p className="text-[10px] text-amber-600 font-bold">
-                সমগ্র প্ল্যাটফর্ম মিল কাউন্ট
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shadow-sm">
-              <Utensils className="w-7 h-7" />
-            </div>
-          </div>
-        </div>
-
-        {/* User Role Distribution Section */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-black text-slate-800">ইউজার রোল অনুপাত (Global Role Distribution)</h3>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">নিবন্ধিত ব্যবহারকারীদের ভূমিকার লাইভ গ্রাফিক্যাল বন্টন</p>
-            </div>
-            <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-100">
-              মোট: {totalUsersCount} জন ইউজার
-            </span>
+        {/* Light Mode Luxury Header Banner */}
+        <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none">
+            <Crown className="w-56 h-56 text-indigo-900" />
           </div>
           
-          <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex">
-            <div 
-              style={{ width: `${managerPercent}%` }} 
-              className="bg-indigo-500 h-full transition-all" 
-              title={`ম্যানেজার: ${managersCount} জন (${managerPercent.toFixed(1)}%)`} 
-            />
-            <div 
-              style={{ width: `${memberPercent}%` }} 
-              className="bg-emerald-500 h-full transition-all" 
-              title={`মেম্বার: ${membersCount} জন (${memberPercent.toFixed(1)}%)`} 
-            />
-            <div 
-              style={{ width: `${pendingPercent}%` }} 
-              className="bg-amber-500 h-full transition-all" 
-              title={`পেন্ডিং: ${pendingCount} জন (${pendingPercent.toFixed(1)}%)`} 
-            />
+          <div className="space-y-2 relative z-10">
+            <div className="flex items-center gap-2">
+              <span className="px-3.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-black rounded-full border border-indigo-100 uppercase tracking-widest flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                সুপার অ্যাডমিন প্যানেল
+              </span>
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-black bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 bg-clip-text text-transparent tracking-tight">
+              স্বাগতম, {mongoUser.name}
+            </h1>
+            <p className="text-slate-500 text-xs sm:text-sm font-medium">অ্যাপ্লিকেশনের গ্লোবাল মনিটরিং হাব, মেস কন্ট্রোল এবং প্ল্যাটফর্ম ম্যানেজমেন্ট</p>
           </div>
-
-          <div className="flex flex-wrap gap-6 text-xs font-bold text-slate-600 pt-1">
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 bg-indigo-500 rounded-full" />
-              ম্যানেজার: {managersCount} জন ({managerPercent.toFixed(1)}%)
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 bg-emerald-500 rounded-full" />
-              মেম্বার: {membersCount} জন ({memberPercent.toFixed(1)}%)
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 bg-amber-500 rounded-full" />
-              পেন্ডিং: {pendingCount} জন ({pendingPercent.toFixed(1)}%)
-            </span>
+          
+          <div className="flex flex-wrap items-center gap-3 relative z-10">
+            <button
+              type="button"
+              onClick={() => {
+                setShowBroadcastModal(true);
+                setSaActiveTab('broadcast');
+              }}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-xs transition-all flex items-center gap-2 shadow-md shadow-indigo-200"
+            >
+              <Megaphone className="w-4 h-4 text-white" />
+              📢 ব্রডকাস্ট নোটিশ
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(superAdminData, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `system-audit-report-${new Date().toISOString().split('T')[0]}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+                toast.success("অডিট রিপোর্ট ডাউনলোড হয়েছে!");
+              }}
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-2xl text-xs transition-all flex items-center gap-2 border border-slate-200"
+            >
+              <Download className="w-4 h-4 text-indigo-600" />
+              অডিট রিপোর্ট
+            </button>
           </div>
         </div>
 
-        {/* Database Stats & System Diagnostics */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* DB details */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-              <h3 className="text-sm font-bold text-slate-800">ডাটাবেজ হেলথ ও মেট্রিক্স (MongoDB)</h3>
-              <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-600 text-[10px] font-bold rounded-full">
-                সক্রিয়
-              </span>
+        {/* Light Mode Multi-Tab Navigation Suite */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-slate-200">
+          <button
+            type="button"
+            onClick={() => setSaActiveTab('overview')}
+            className={`px-5 py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-2 whitespace-nowrap ${
+              saActiveTab === 'overview'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'
+            }`}
+          >
+            <Activity className="w-4 h-4" />
+            📊 সিস্টেম ওভারভিউ
+          </button>
+          <button
+            type="button"
+            onClick={() => setSaActiveTab('messes')}
+            className={`px-5 py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-2 whitespace-nowrap ${
+              saActiveTab === 'messes'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            🏢 মেস ডিরেক্টরি ({superAdminData?.messesCount || 0})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSaActiveTab('users')}
+            className={`px-5 py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-2 whitespace-nowrap ${
+              saActiveTab === 'users'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            👥 ইউজার ও রোল ডিরেক্টরি ({superAdminData?.usersCount || 0})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSaActiveTab('broadcast')}
+            className={`px-5 py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-2 whitespace-nowrap ${
+              saActiveTab === 'broadcast'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'
+            }`}
+          >
+            <Megaphone className="w-4 h-4" />
+            📢 ব্রডকাস্ট নোটিশ হাব
+          </button>
+          <button
+            type="button"
+            onClick={() => setSaActiveTab('health')}
+            className={`px-5 py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-2 whitespace-nowrap ${
+              saActiveTab === 'health'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'
+            }`}
+          >
+            <Cloud className="w-4 h-4" />
+            ⚡ স্টোরেজ ও ডায়াগনস্টিকস
+          </button>
+        </div>
+
+        {/* TAB 1: OVERVIEW */}
+        {saActiveTab === 'overview' && (
+          <div className="space-y-6">
+            {/* System Scale Metric Cards (Light Pastel Theme) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {/* Total Messes Card */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-all">
+                <div className="space-y-1">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-wider">মোট নিবন্ধিত মেস</span>
+                  <h2 className="text-3xl font-black text-slate-900">{superAdminData?.messesCount || 0} টি</h2>
+                  <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                    <span>●</span> {superAdminData?.messes?.filter((m: any) => m.status !== 'Suspended').length || 0} টি মেস সচল
+                  </p>
+                </div>
+                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center border border-indigo-100">
+                  <Building2 className="w-7 h-7" />
+                </div>
+              </div>
+
+              {/* Total Registered Users Card */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-all">
+                <div className="space-y-1">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-wider">মোট নিবন্ধিত ইউজার</span>
+                  <h2 className="text-3xl font-black text-slate-900">{superAdminData?.usersCount || 0} জন</h2>
+                  <p className="text-[10px] text-indigo-600 font-bold">
+                    ম্যানেজার: {managersCount} | মেম্বার: {membersCount}
+                  </p>
+                </div>
+                <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center border border-blue-100">
+                  <Users className="w-7 h-7" />
+                </div>
+              </div>
+
+              {/* Database Object Stats Card */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-all">
+                <div className="space-y-1">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-wider">ডাটাবেজ অবজেক্টস</span>
+                  <h2 className="text-3xl font-black text-slate-900">{superAdminData?.dbStats?.objectsCount || 0} টি</h2>
+                  <p className="text-[10px] text-emerald-600 font-bold">
+                    কালেকশনস: {superAdminData?.dbStats?.collectionsCount || 0} টি
+                  </p>
+                </div>
+                <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100">
+                  <Activity className="w-7 h-7" />
+                </div>
+              </div>
+
+              {/* Cloud Files Storage Card */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-all">
+                <div className="space-y-1">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-wider">ক্লাউড ফাইল সংখ্যা</span>
+                  <h2 className="text-3xl font-black text-slate-900">{storageFiles.length} টি</h2>
+                  <p className="text-[10px] text-amber-600 font-bold">
+                    সীমা: ৫.০০ GB ফ্রি টিয়ার
+                  </p>
+                </div>
+                <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center border border-amber-100">
+                  <Cloud className="w-7 h-7" />
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ডাটা অবজেক্টস</span>
-                <span className="text-lg font-black text-slate-800 mt-1">{superAdminData?.dbStats?.objectsCount || 0} টি</span>
-              </div>
-              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">মোট কালেকশনস</span>
-                <span className="text-lg font-black text-slate-800 mt-1">{superAdminData?.dbStats?.collectionsCount || 0} টি</span>
-              </div>
-              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ইনডেক্স সাইজ</span>
-                <span className="text-lg font-black text-slate-850 mt-1">
-                  {superAdminData?.dbStats?.indexSizeBytes ? (superAdminData.dbStats.indexSizeBytes / 1024).toFixed(1) : '0.0'} KB
+            {/* User Role Distribution Section */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">গ্লোবাল ইউজার রোল অনুপাত (Role Distribution)</h3>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5">নিবন্ধিত ব্যবহারকারীদের ভূমিকার লাইভ অনুপাত</p>
+                </div>
+                <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-100">
+                  মোট: {totalUsersCount} জন ইউজার
                 </span>
               </div>
-              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ব্যবহৃত স্পেস</span>
-                <span className="text-lg font-black text-slate-850 mt-1">
-                  {superAdminData?.dbStats?.totalUsedBytes ? (superAdminData.dbStats.totalUsedBytes / (1024 * 1024)).toFixed(2) : '0.00'} MB
+              
+              <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex">
+                <div 
+                  style={{ width: `${managerPercent}%` }} 
+                  className="bg-indigo-500 h-full transition-all" 
+                  title={`ম্যানেজার: ${managersCount} জন (${managerPercent.toFixed(1)}%)`} 
+                />
+                <div 
+                  style={{ width: `${memberPercent}%` }} 
+                  className="bg-emerald-500 h-full transition-all" 
+                  title={`মেম্বার: ${membersCount} জন (${memberPercent.toFixed(1)}%)`} 
+                />
+                <div 
+                  style={{ width: `${pendingPercent}%` }} 
+                  className="bg-amber-500 h-full transition-all" 
+                  title={`পেন্ডিং: ${pendingCount} জন (${pendingPercent.toFixed(1)}%)`} 
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-6 text-xs font-bold text-slate-600 pt-1">
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 bg-indigo-500 rounded-full" />
+                  ম্যানেজার: {managersCount} জন ({managerPercent.toFixed(1)}%)
                 </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 bg-emerald-500 rounded-full" />
+                  মেম্বার: {membersCount} জন ({memberPercent.toFixed(1)}%)
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 bg-amber-500 rounded-full" />
+                  পেন্ডিং: {pendingCount} জন ({pendingPercent.toFixed(1)}%)
+                </span>
+              </div>
+            </div>
+
+            {/* System Diagnostics Checklist */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-bold text-slate-800">সিস্টেম ডায়াগনস্টিকস ও সার্ভিস স্ট্যাটাস</h3>
+                <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">
+                  অনলাইন
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">Next.js Turbo Engine</span>
+                  <span className="text-emerald-700 font-extrabold text-xs">সক্রিয়</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">MongoDB ক্লাউড সংযোগ</span>
+                  <span className="text-emerald-700 font-extrabold text-xs">অনলাইন</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">রিয়েল-টাইম পুশ ইঞ্জিন</span>
+                  <span className="text-emerald-700 font-extrabold text-xs">সক্রিয়</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">ফ্রি ফায়ারবেস স্টোরেজ</span>
+                  <span className="text-emerald-700 font-extrabold text-xs">অনলাইন</span>
+                </div>
               </div>
             </div>
           </div>
+        )}
 
-          {/* Firebase Storage Details */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-              <h3 className="text-sm font-bold text-slate-800">ক্লাউড ফাইল স্টোরেজ মেট্রিক্স (Firebase)</h3>
-              <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-600 text-[10px] font-bold rounded-full">
-                সক্রিয়
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">মোট ফাইল সংখ্যা</span>
-                <span className="text-lg font-black text-slate-800 mt-1">{storageFiles.length} টি</span>
+        {/* TAB 2: MESS MANAGEMENT */}
+        {saActiveTab === 'messes' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">নিবন্ধিত মেস ডিরেক্টরি</h3>
+                <p className="text-xs text-slate-400 font-bold mt-0.5">সিস্টেমে থাকা সকল মেস এবং তাদের অ্যাক্টিভ স্ট্যাটাস</p>
               </div>
-              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">মোট সীমা (Limit)</span>
-                <span className="text-lg font-black text-slate-800 mt-1">৫.০০ GB</span>
-              </div>
-              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">অবশিষ্ট স্পেস</span>
-                <span className="text-lg font-black text-slate-850 mt-1 truncate">
-                  {firebaseFreeSpaceBytes > 1024 * 1024 * 1024 
-                    ? `${(firebaseFreeSpaceBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-                    : `${(firebaseFreeSpaceBytes / (1024 * 1024)).toFixed(1)} MB`
-                  }
-                </span>
-              </div>
-              <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ব্যবহৃত স্পেস</span>
-                <span className="text-lg font-black text-slate-850 mt-1 truncate">
-                  {totalFirebaseUsedBytes > 1024 * 1024 
-                    ? `${(totalFirebaseUsedBytes / (1024 * 1024)).toFixed(2)} MB`
-                    : `${(totalFirebaseUsedBytes / 1024).toFixed(1)} KB`
-                  }
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-1.5 pt-1">
-              <div className="flex justify-between items-center text-[10px] font-bold text-slate-400">
-                <span>স্টোরেজ ব্যবহারের হার</span>
-                <span>{firebasePercentUsed}%</span>
-              </div>
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="bg-blue-500 h-full rounded-full transition-all duration-500" 
-                  style={{ width: `${Math.min(parseFloat(firebasePercentUsed), 100)}%` }} 
+              
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-4 top-3.5 w-4.5 h-4.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={superAdminSearch}
+                  onChange={(e) => setSuperAdminSearch(e.target.value)}
+                  placeholder="মেস নাম বা কোড দিয়ে খুঁজুন..."
+                  className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all bg-slate-50/50"
                 />
               </div>
             </div>
-          </div>
 
-          {/* System Configurations */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-              <h3 className="text-sm font-bold text-slate-800">সিস্টেম ডায়াগনস্টিকস ও সার্ভিসেস</h3>
-              <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-600 text-[10px] font-bold rounded-full">
-                সকল সার্ভিস ওকে
-              </span>
-            </div>
-
-            <div className="space-y-3 pt-1">
-              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                <span>অ্যাপ্লিকেশন ইঞ্জিন (Next.js Turbo)</span>
-                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">সক্রিয়</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                <span>MongoDB ক্লাউড সংযোগ</span>
-                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">অনলাইন</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                <span>রিয়েল-টাইম পুশ ইঞ্জিন</span>
-                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">সক্রিয়</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                <span>ফায়ারবেস স্টোরেজ বাকেট</span>
-                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">অনলাইন</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Global Master Database Tables */}
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900">অ্যাপ্লিকেশন মাস্টার ডেটাবেজ ও রোল কন্ট্রোল</h3>
-              <p className="text-xs text-slate-400 font-bold mt-0.5">মেস স্ট্যাটাস এবং গ্লোবাল ইউজার পারমিশন কন্ট্রোল প্যানেল</p>
-            </div>
-            
-            {/* Real-time search bar */}
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-4 top-3.5 w-4.5 h-4.5 text-slate-400" />
-              <input
-                type="text"
-                value={superAdminSearch}
-                onChange={(e) => setSuperAdminSearch(e.target.value)}
-                placeholder="মেস নাম, কোড, মেম্বার বা ইমেইল দিয়ে খুঁজুন..."
-                className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all bg-slate-50/50"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Messes Column */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <span className="text-xs font-black text-slate-500">মেস তালিকা ({filteredMesses.length} টি)</span>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                      <th className="px-4 py-3">মেস তথ্য</th>
-                      <th className="px-4 py-3 text-center">মেম্বার</th>
-                      <th className="px-4 py-3">কোড</th>
-                      <th className="px-4 py-3 text-right">অ্যাকশন</th>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <th className="px-4 py-3">মেস নাম</th>
+                    <th className="px-4 py-3">ম্যানেজার</th>
+                    <th className="px-4 py-3 text-center">মেম্বার সংখ্যা</th>
+                    <th className="px-4 py-3">মেস কোড</th>
+                    <th className="px-4 py-3 text-right">স্ট্যাটাস ও অ্যাকশন</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredMesses.map((m: any) => (
+                    <tr key={m._id} className="hover:bg-slate-50/50 transition-colors text-xs">
+                      <td className="px-4 py-3.5 font-bold text-slate-800">
+                        {m.name}
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-600 font-medium">
+                        {m.creatorId?.name || 'N/A'} ({m.creatorId?.email || 'N/A'})
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <span className="px-3 py-1 bg-indigo-50 text-indigo-700 font-extrabold rounded-full border border-indigo-100">
+                          {m.memberCount} জন
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 font-mono font-bold text-indigo-600">
+                        {m.code}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleSAToggleMessStatus(m._id, m.status)}
+                          disabled={saMessLoading[m._id]}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 ${
+                            m.status === 'Suspended'
+                              ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
+                              : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100'
+                          }`}
+                        >
+                          {saMessLoading[m._id] ? '...' : m.status === 'Suspended' ? 'সচল করুন' : 'সাসপেন্ড করুন'}
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredMesses.map((m: any) => (
-                      <tr key={m._id} className="hover:bg-slate-50/50 transition-colors text-xs">
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-slate-800">{m.name}</p>
-                          <p className="text-[10px] text-slate-400 font-semibold">ম্যানেজার: {m.creatorId?.name || 'N/A'}</p>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-650 font-extrabold rounded-full border border-indigo-100/50">
-                            {m.memberCount} জন
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-mono font-bold text-indigo-600">
-                          {m.code}
-                        </td>
-                        <td className="px-4 py-3 text-right">
+                  ))}
+                  {filteredMesses.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-12 text-center text-slate-400 font-bold">কোনো মেস পাওয়া যায়নি।</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: USER & ROLE DIRECTORY */}
+        {saActiveTab === 'users' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">গ্লোবাল ইউজার ও রোল ডিরেক্টরি</h3>
+                <p className="text-xs text-slate-400 font-bold mt-0.5">ব্যবহারকারীদের ভূমিকা ও পারমিশন কন্ট্রোল প্যানেল</p>
+              </div>
+              
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-4 top-3.5 w-4.5 h-4.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={superAdminSearch}
+                  onChange={(e) => setSuperAdminSearch(e.target.value)}
+                  placeholder="ইউজার নাম বা ইমেইল দিয়ে খুঁজুন..."
+                  className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all bg-slate-50/50"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <th className="px-4 py-3">ইউজার নাম ও ইমেইল</th>
+                    <th className="px-4 py-3">বর্তমান ভূমিকা</th>
+                    <th className="px-4 py-3">সংযুক্ত মেস</th>
+                    <th className="px-4 py-3 text-right">রোল পরিবর্তন করুন</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredUsers.map((u: any) => (
+                    <tr key={u._id} className="hover:bg-slate-50/50 transition-colors text-xs">
+                      <td className="px-4 py-3.5">
+                        <p className="font-bold text-slate-800">{u.name}</p>
+                        <p className="text-[10px] text-slate-400 font-medium">{u.email}</p>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold ${
+                          u.role === 'Super Admin' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
+                          u.role === 'Manager' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                          'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 font-semibold text-slate-700">
+                        {u.messId?.name || <span className="text-slate-400 font-normal">কোনো মেসে নেই</span>}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        {saEditingUserId === u._id ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <select
+                              value={saSelectedRole}
+                              onChange={(e) => setSaSelectedRole(e.target.value as any)}
+                              className="px-2 py-1 bg-white border border-indigo-300 rounded-lg text-xs font-bold text-slate-800"
+                            >
+                              <option value="Super Admin">Super Admin</option>
+                              <option value="Manager">Manager</option>
+                              <option value="Member">Member</option>
+                              <option value="Pending">Pending</option>
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => handleSAUpdateRole(u._id)}
+                              disabled={saRoleLoading}
+                              className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-sm"
+                            >
+                              সেভ
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSaEditingUserId(null)}
+                              className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
                           <button
-                            onClick={() => handleSAToggleMessStatus(m._id, m.status)}
-                            disabled={saMessLoading[m._id]}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all disabled:opacity-50 ${
-                              m.status === 'Suspended'
-                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100'
-                            }`}
+                            type="button"
+                            onClick={() => {
+                              setSaEditingUserId(u._id);
+                              setSaSelectedRole(u.role);
+                            }}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-extrabold transition-all border border-slate-200"
                           >
-                            {saMessLoading[m._id] ? '...' : m.status === 'Suspended' ? 'সচল' : 'সাসপেন্ড'}
+                            রোল চেঞ্জ
                           </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredMesses.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-slate-400 font-bold">কোনো মেস পাওয়া যায়নি।</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-12 text-center text-slate-400 font-bold">কোনো ইউজার পাওয়া যায়নি।</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: SYSTEM BROADCAST HUB */}
+        {saActiveTab === 'broadcast' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8 space-y-6">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900">📢 সিস্টেম ব্রডকাস্ট নোটিশ সেন্টার</h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">সমগ্র প্ল্যাটফর্মের মেসে অথবা নির্দিষ্ট মেসে জরুরি বার্তা লাইভ পুশ নোটিফিকেশন পাঠান</p>
+            </div>
+
+            <form onSubmit={handleSABroadcast} className="space-y-4 max-w-2xl">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">প্রাপক মেস নির্বাচন করুন</label>
+                <select
+                  value={saBroadcastTarget}
+                  onChange={(e) => setSaBroadcastTarget(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="ALL">🌐 সকল মেসে একসাথে পাঠান (Global Broadcast Notice)</option>
+                  {(superAdminData?.messes || []).map((m: any) => (
+                    <option key={m._id} value={m._id}>🏢 {m.name} ({m.code})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">নোটিশের শিরোনাম</label>
+                <input
+                  type="text"
+                  placeholder="যেমন: জরুরি সিস্টেম মেইনটেন্যান্স অথবা অফার নোটিশ..."
+                  value={saBroadcastTitle}
+                  onChange={(e) => setSaBroadcastTitle(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">বার্তা বিবরণ</label>
+                <textarea
+                  rows={5}
+                  placeholder="মেসেজের বিস্তারিত বার্তা লিখুন..."
+                  value={saBroadcastMessage}
+                  onChange={(e) => setSaBroadcastMessage(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={saBroadcasting}
+                  className="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-xs flex items-center gap-2 shadow-lg shadow-indigo-200 disabled:opacity-50 transition-all"
+                >
+                  {saBroadcasting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  এখনই ব্রডকাস্ট নোটিশ পাঠান
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* TAB 5: SYSTEM HEALTH & STORAGE ANALYTICS */}
+        {saActiveTab === 'health' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* MongoDB Metrics */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-bold text-slate-800">ডাটাবেজ মেট্রিক্স (MongoDB)</h3>
+                <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">
+                  সক্রিয়
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ডাটা অবজেক্টস</span>
+                  <span className="text-xl font-black text-slate-800 mt-1">{superAdminData?.dbStats?.objectsCount || 0} টি</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">মোট কালেকশনস</span>
+                  <span className="text-xl font-black text-slate-800 mt-1">{superAdminData?.dbStats?.collectionsCount || 0} টি</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ইনডেক্স সাইজ</span>
+                  <span className="text-xl font-black text-slate-800 mt-1">
+                    {superAdminData?.dbStats?.indexSizeBytes ? (superAdminData.dbStats.indexSizeBytes / 1024).toFixed(1) : '0.0'} KB
+                  </span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ব্যবহৃত স্পেস</span>
+                  <span className="text-xl font-black text-slate-800 mt-1">
+                    {superAdminData?.dbStats?.totalUsedBytes ? (superAdminData.dbStats.totalUsedBytes / (1024 * 1024)).toFixed(2) : '0.00'} MB
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* Users Column */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <span className="text-xs font-bold text-slate-500">ইউজার তালিকা ({filteredUsers.length} জন পাওয়া গেছে)</span>
+            {/* Firebase Storage Details */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-bold text-slate-800">ক্লাউড ফাইল স্টোরেজ (Firebase)</h3>
+                <span className="px-2.5 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-bold rounded-full">
+                  সক্রিয়
+                </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                      <th className="px-4 py-3">ইউজার তথ্য</th>
-                      <th className="px-4 py-3">ভূমিকা</th>
-                      <th className="px-4 py-3">মেস</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredUsers.map((u: any) => (
-                      <tr key={u._id} className="hover:bg-slate-50/50 transition-colors text-xs">
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-slate-805">{u.name}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">{u.email}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          {u.role === 'Super Admin' && <span className="px-2 py-0.5 bg-purple-50 text-purple-600 font-bold rounded-lg border border-purple-100/50">সুপার অ্যাডমিন</span>}
-                          {u.role === 'Manager' && <span className="px-2 py-0.5 bg-blue-50 text-blue-600 font-bold rounded-lg border border-blue-100/50">ম্যানেজার</span>}
-                          {u.role === 'Member' && <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 font-bold rounded-lg border border-emerald-100/50">মেম্বার</span>}
-                          {u.role === 'Pending' && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 font-bold rounded-lg border border-amber-100/50">পেন্ডিং</span>}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-slate-700">
-                          {u.messId?.name || <span className="text-slate-400 font-normal">কোনো মেসে নেই</span>}
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredUsers.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-slate-400 font-bold">কোনো ইউজার পাওয়া যায়নি।</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">মোট ফাইল সংখ্যা</span>
+                  <span className="text-xl font-black text-slate-800 mt-1">{storageFiles.length} টি</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">মোট সীমা (Limit)</span>
+                  <span className="text-xl font-black text-slate-800 mt-1">৫.০০ GB</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">অবশিষ্ট স্পেস</span>
+                  <span className="text-xl font-black text-slate-800 mt-1 truncate">
+                    {firebaseFreeSpaceBytes > 1024 * 1024 * 1024 
+                      ? `${(firebaseFreeSpaceBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+                      : `${(firebaseFreeSpaceBytes / (1024 * 1024)).toFixed(1)} MB`
+                    }
+                  </span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ব্যবহৃত স্পেস</span>
+                  <span className="text-xl font-black text-slate-800 mt-1 truncate">
+                    {totalFirebaseUsedBytes > 1024 * 1024 
+                      ? `${(totalFirebaseUsedBytes / (1024 * 1024)).toFixed(2)} MB`
+                      : `${(totalFirebaseUsedBytes / 1024).toFixed(1)} KB`
+                    }
+                  </span>
+                </div>
               </div>
+
+              <div className="space-y-1.5 pt-1">
+                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400">
+                  <span>স্টোরেজ ব্যবহারের হার</span>
+                  <span>{firebasePercentUsed}%</span>
+                </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${Math.min(parseFloat(firebasePercentUsed), 100)}%` }} 
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        )}
 
+        {/* Global Broadcast Announcement Modal */}
+        {showBroadcastModal && (
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white text-slate-900 rounded-3xl p-6 max-w-lg w-full border border-slate-100 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Megaphone className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-extrabold text-base text-slate-900">সিস্টেম ব্রডকাস্ট নোটিশ</h3>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setShowBroadcastModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSABroadcast} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">প্রাপক মেস</label>
+                  <select
+                    value={saBroadcastTarget}
+                    onChange={(e) => setSaBroadcastTarget(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="ALL">🌐 সকল মেসে একসাথে পাঠান (Global Broadcast)</option>
+                    {(superAdminData?.messes || []).map((m: any) => (
+                      <option key={m._id} value={m._id}>🏢 {m.name} ({m.code})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">নোটিশের শিরোনাম</label>
+                  <input
+                    type="text"
+                    placeholder="যেমন: জরুরি আপডেট নোটিশ..."
+                    value={saBroadcastTitle}
+                    onChange={(e) => setSaBroadcastTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">বার্তা বিবরণ</label>
+                  <textarea
+                    rows={4}
+                    placeholder="মেসেজের বিস্তারিত বার্তা লিখুন..."
+                    value={saBroadcastMessage}
+                    onChange={(e) => setSaBroadcastMessage(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBroadcastModal(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+                  >
+                    ক্যানসেল
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saBroadcasting}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold rounded-xl flex items-center gap-2 shadow-md shadow-indigo-100 disabled:opacity-50"
+                  >
+                    {saBroadcasting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    ব্রডকাস্ট পাঠান
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
