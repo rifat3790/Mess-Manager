@@ -208,6 +208,61 @@ export async function rejectSubscriptionRequest(
   }
 }
 
+export async function sendSubscriptionMessage(
+  userId: string | any,
+  requestId: string,
+  text: string
+) {
+  try {
+    await connectToDatabase();
+
+    const resolvedUserId = typeof userId === 'object' && userId?._id ? userId._id.toString() : userId?.toString();
+    const user = await User.findById(resolvedUserId).lean();
+    if (!user) return { success: false, error: 'ইউজার পাওয়া যায়নি।' };
+
+    const reqDoc = await SubscriptionRequest.findById(requestId);
+    if (!reqDoc) return { success: false, error: 'পেমেন্ট রিকোয়েস্ট পাওয়া যায়নি।' };
+
+    const senderRole: 'Super Admin' | 'User' = user.role === 'Super Admin' ? 'Super Admin' : 'User';
+    const messageObj = {
+      senderRole,
+      senderName: user.name,
+      text: text.trim(),
+      createdAt: new Date()
+    };
+
+    if (!reqDoc.messages) {
+      reqDoc.messages = [];
+    }
+    reqDoc.messages.push(messageObj as any);
+    await reqDoc.save();
+
+    // Send push notification to recipient
+    if (senderRole === 'Super Admin') {
+      await createNotification(
+        "💬 সাবস্ক্রিপশন পেমেন্ট বার্তা (Super Admin)",
+        `সুপার অ্যাডমিন বার্তা পাঠিয়েছেন: "${text.trim()}"`,
+        reqDoc.userId.toString()
+      );
+    } else {
+      const superAdmins = await User.find({ role: 'Super Admin' }).select('_id');
+      for (const sa of superAdmins) {
+        await createNotification(
+          "💬 সাবস্ক্রিপশন উত্তর বার্তা",
+          `মেস ব্যবহারকারী (${user.name}) বার্তা পাঠিয়েছেন: "${text.trim()}"`,
+          sa._id.toString()
+        );
+      }
+    }
+
+    revalidatePath('/', 'layout');
+    revalidatePath('/subscription');
+    return { success: true, request: JSON.parse(JSON.stringify(reqDoc)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function getMessSubscriptionDetails(messId: string | any) {
   try {
     await connectToDatabase();

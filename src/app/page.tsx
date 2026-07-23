@@ -85,7 +85,8 @@ import {
   getSubscriptionRequests, 
   approveSubscriptionRequest, 
   rejectSubscriptionRequest,
-  grantMessSubscription
+  grantMessSubscription,
+  sendSubscriptionMessage
 } from './actions/subscriptionActions';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
@@ -127,6 +128,35 @@ export default function Home() {
   const [saMessFilter, setSaMessFilter] = useState<'ALL' | 'Active' | 'Suspended'>('ALL');
   const [saSubRequests, setSaSubRequests] = useState<any[]>([]);
   const [saSubLoading, setSaSubLoading] = useState<Record<string, boolean>>({});
+  const [saSubOverrideMonths, setSaSubOverrideMonths] = useState<Record<string, number>>({});
+  const [saMsgModalReq, setSaMsgModalReq] = useState<any | null>(null);
+  const [saMsgText, setSaMsgText] = useState('');
+  const [saMsgSending, setSaMsgSending] = useState(false);
+
+  const handleSASendSubscriptionMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!saMsgText.trim() || !saMsgModalReq?._id || !mongoUser?._id) return;
+    try {
+      setSaMsgSending(true);
+      const res = await sendSubscriptionMessage(mongoUser._id, saMsgModalReq._id, saMsgText);
+      if (res.success) {
+        toast.success("ইউজারকে বার্তা পাঠানো হয়েছে!");
+        setSaMsgText('');
+        const subRes = await getSubscriptionRequests(mongoUser._id);
+        if (subRes.success) {
+          setSaSubRequests(subRes.requests || []);
+          const updated = (subRes.requests || []).find((r: any) => r._id === saMsgModalReq._id);
+          if (updated) setSaMsgModalReq(updated);
+        }
+      } else {
+        toast.error(res.error || "মেসেজ পাঠাতে সমস্যা হয়েছে");
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaMsgSending(false);
+    }
+  };
 
   const handleSAApproveSubscription = async (requestId: string, months?: number) => {
     if (!mongoUser?._id) return;
@@ -1669,34 +1699,58 @@ export default function Home() {
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-right space-x-1.5">
-                        {req.status === 'Pending' ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleSAApproveSubscription(req._id, req.months)}
-                              disabled={saSubLoading[req._id]}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs shadow-sm transition-all disabled:opacity-50"
-                            >
-                              {saSubLoading[req._id] ? '...' : `অনুমোদন (${req.months} মাস)`}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleSARejectSubscription(req._id)}
-                              disabled={saSubLoading[req._id]}
-                              className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold rounded-xl text-xs border border-rose-200"
-                            >
-                              বাতিল
-                            </button>
-                          </div>
-                        ) : req.status === 'Approved' ? (
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            {new Date(req.approvedAt).toLocaleDateString()} এ এপ্রুভ হয়েছে
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-rose-400 font-medium">
-                            বাতিল করা হয়েছে
-                          </span>
-                        )}
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSaMsgModalReq(req)}
+                            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold rounded-xl text-xs border border-indigo-200 flex items-center gap-1"
+                            title="ইউজারকে বার্তা পাঠান বা উত্তর দিন"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            বার্তা ({req.messages?.length || 0})
+                          </button>
+                          {req.status === 'Pending' ? (
+                            <>
+                              <select
+                                value={saSubOverrideMonths[req._id] || req.months}
+                                onChange={(e) => setSaSubOverrideMonths(prev => ({ ...prev, [req._id]: Number(e.target.value) }))}
+                                className="px-2 py-1.5 bg-white border border-emerald-300 text-slate-800 rounded-xl text-xs font-bold focus:outline-none shadow-xs"
+                              >
+                                <option value={1}>১ মাস (31d)</option>
+                                <option value={2}>২ মাস (62d)</option>
+                                <option value={3}>৩ মাস (93d)</option>
+                                <option value={4}>৪ মাস (124d)</option>
+                                <option value={5}>৫ মাস (155d)</option>
+                                <option value={6}>৬ মাস (186d)</option>
+                                <option value={12}>১২ মাস (372d)</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => handleSAApproveSubscription(req._id, saSubOverrideMonths[req._id] || req.months)}
+                                disabled={saSubLoading[req._id]}
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs shadow-sm transition-all disabled:opacity-50"
+                              >
+                                {saSubLoading[req._id] ? '...' : `অনুমোদন (${saSubOverrideMonths[req._id] || req.months} মাস)`}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSARejectSubscription(req._id)}
+                                disabled={saSubLoading[req._id]}
+                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold rounded-xl text-xs border border-rose-200"
+                              >
+                                বাতিল
+                              </button>
+                            </>
+                          ) : req.status === 'Approved' ? (
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              {new Date(req.approvedAt).toLocaleDateString()} এ এপ্রুভ হয়েছে
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-rose-400 font-medium">
+                              বাতিল করা হয়েছে
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1895,6 +1949,111 @@ export default function Home() {
                   />
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Super Admin Direct Message & Conversation Modal */}
+        {saMsgModalReq && (
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white text-slate-900 rounded-3xl p-6 max-w-lg w-full border border-slate-100 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-indigo-600" />
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900">ইউজার মেসেজিং ডায়ালগ</h3>
+                    <p className="text-[10px] text-slate-400 font-bold">
+                      {saMsgModalReq.messId?.name} - {saMsgModalReq.userId?.name} (TrxID: {saMsgModalReq.trxId})
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setSaMsgModalReq(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Conversation Messages */}
+              <div className="space-y-2.5 max-h-64 overflow-y-auto p-2 bg-slate-50 rounded-2xl border border-slate-100">
+                {saMsgModalReq.messages && saMsgModalReq.messages.length > 0 ? (
+                  saMsgModalReq.messages.map((m: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-2xl text-xs space-y-1 ${
+                        m.senderRole === 'Super Admin'
+                          ? 'bg-indigo-600 text-white ml-auto max-w-[85%]'
+                          : 'bg-white text-slate-800 border border-slate-200 mr-auto max-w-[85%]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3 text-[10px] opacity-80 font-bold">
+                        <span>{m.senderName} ({m.senderRole})</span>
+                        <span>{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className="font-semibold">{m.text}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-xs text-slate-400 font-bold py-6">
+                    এই রিকোয়েস্টে কোনো পূর্ববর্তী মেসেজ নেই। নিচে টাইপ করে ইউজারের কাছে বার্তা পাঠান।
+                  </p>
+                )}
+              </div>
+
+              {/* Quick Template Preset Buttons */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSaMsgText("আপনার পাঠানো টাকা কম হয়েছে। বাকি টাকা পাঠিয়ে উত্তর দিন।")}
+                  className="px-2.5 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg text-[10px] font-bold border border-amber-200"
+                >
+                  ⚠️ টাকা কম পাঠানো হয়েছে
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSaMsgText("আপনার TrxID মিলছে না। সঠিক TrxID লিখে উত্তর দিন।")}
+                  className="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-[10px] font-bold border border-rose-200"
+                >
+                  ❌ TrxID সঠিক নয়
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSaMsgText("পেমেন্ট নম্বর ও ট্রানজেকশন তথ্য রি-চেক করা হচ্ছে।")}
+                  className="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-[10px] font-bold border border-indigo-200"
+                >
+                  ⏳ যাচাইকরণ চলছে
+                </button>
+              </div>
+
+              {/* Reply Form */}
+              <form onSubmit={handleSASendSubscriptionMessage} className="space-y-3 pt-1">
+                <textarea
+                  rows={2}
+                  placeholder="ইউজারকে মেসেজ লিখুন (যেমন: আপনার ৫ টাকা কম রয়েছে)..."
+                  value={saMsgText}
+                  onChange={(e) => setSaMsgText(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSaMsgModalReq(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl"
+                  >
+                    বন্ধ করুন
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saMsgSending || !saMsgText.trim()}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold rounded-xl flex items-center gap-2 shadow-md shadow-indigo-100 disabled:opacity-50"
+                  >
+                    {saMsgSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    মেসেজ পাঠান
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

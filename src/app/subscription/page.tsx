@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { 
   getMessSubscriptionDetails, 
-  submitSubscriptionRequest 
+  submitSubscriptionRequest,
+  sendSubscriptionMessage 
 } from '@/app/actions/subscriptionActions';
 import { 
   Crown, 
@@ -20,8 +21,7 @@ import {
   CheckCircle2,
   Lock,
   Zap,
-  ArrowRight,
-  HelpCircle
+  MessageSquare
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -47,6 +47,10 @@ export default function SubscriptionPage() {
   const [trxId, setTrxId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Chat message state
+  const [userMsgText, setUserMsgText] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
 
   const BKASH_NAGAD_NUMBER = "01952321390";
 
@@ -120,6 +124,27 @@ export default function SubscriptionPage() {
     }
   };
 
+  const handleSendUserMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userMsgText.trim() || !subData?.pendingRequest?._id || !mongoUser?._id) return;
+
+    try {
+      setSendingMsg(true);
+      const res = await sendSubscriptionMessage(mongoUser._id, subData.pendingRequest._id, userMsgText);
+      if (res.success) {
+        toast.success("বার্তা সুপার অ্যাডমিনকে পাঠানো হয়েছে!");
+        setUserMsgText('');
+        fetchSubscription();
+      } else {
+        toast.error(res.error || "মেসেজ পাঠানো সম্ভব হয়নি");
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSendingMsg(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -135,43 +160,43 @@ export default function SubscriptionPage() {
 
   return (
     <div className="w-full space-y-8 pb-16">
-      {/* Header Banner - Full Width */}
-      <div className="bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-900 rounded-3xl p-8 sm:p-10 text-white relative overflow-hidden shadow-xl border border-indigo-700/40">
-        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-          <Crown className="w-72 h-72 text-amber-300" />
+      {/* Header Banner - Ultra Light Mode Theme */}
+      <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between gap-6">
+        <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
+          <Crown className="w-72 h-72 text-indigo-900" />
         </div>
 
-        <div className="relative z-10 space-y-4 max-w-3xl">
-          <span className="px-3.5 py-1 bg-amber-400/20 text-amber-300 border border-amber-400/30 text-xs font-black rounded-full uppercase tracking-widest inline-flex items-center gap-1.5 backdrop-blur-md">
-            <Sparkles className="w-3.5 h-3.5" />
+        <div className="relative z-10 space-y-3 max-w-3xl">
+          <span className="px-3.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-black rounded-full uppercase tracking-widest inline-flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             মেস প্রিমিয়াম সাবস্ক্রিপশন সেন্টার
           </span>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
+          <h1 className="text-3xl sm:text-4xl font-black bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 bg-clip-text text-transparent tracking-tight leading-tight">
             আনলিমিটেড মেস ড্যাশবোর্ড ও এডিটিং ফিচারের জন্য সাবস্ক্রিপশন যুক্ত করুন
           </h1>
-          <p className="text-indigo-200 text-xs sm:text-sm font-medium leading-relaxed">
+          <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed">
             মেসের মিল হিসাব, ক্যাশবুক এবং বাজার তালিকা নিয়মিত এডিট ও পরিচালনা করতে সাশ্রয়ী মূল্যে সাবস্ক্রিপশন রেনিউ করুন।
           </p>
         </div>
 
-        {/* Live Active Status Banner */}
-        <div className="mt-8 pt-6 border-t border-indigo-700/50 flex flex-wrap items-center justify-between gap-4 relative z-10">
+        {/* Live Active Status Banner (Light Pastel) */}
+        <div className="mt-4 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 relative z-10">
           {isSubActive ? (
-            <div className="flex items-center gap-3 bg-emerald-500/20 border border-emerald-400/40 px-5 py-3 rounded-2xl backdrop-blur-md">
-              <ShieldCheck className="w-7 h-7 text-emerald-400" />
+            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 px-5 py-3 rounded-2xl">
+              <ShieldCheck className="w-7 h-7 text-emerald-600" />
               <div>
-                <p className="text-xs sm:text-sm font-black text-emerald-300">প্রিমিয়াম সাবস্ক্রিপশন সচল রয়েছে</p>
-                <p className="text-xs text-emerald-200/80 font-semibold">
+                <p className="text-xs sm:text-sm font-black text-emerald-800">প্রিমিয়াম সাবস্ক্রিপশন সচল রয়েছে</p>
+                <p className="text-xs text-emerald-600 font-semibold">
                   মেয়াদ শেষ: {new Date(subData.expiresAt).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })} (আর {daysLeft} দিন বাকি)
                 </p>
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-3 bg-rose-500/20 border border-rose-400/40 px-5 py-3 rounded-2xl backdrop-blur-md">
-              <AlertCircle className="w-7 h-7 text-rose-400" />
+            <div className="flex items-center gap-3 bg-rose-50 border border-rose-100 px-5 py-3 rounded-2xl">
+              <AlertCircle className="w-7 h-7 text-rose-600" />
               <div>
-                <p className="text-xs sm:text-sm font-black text-rose-300">সাবস্ক্রিপশন মেয়াদোত্তীর্ণ বা নিষ্ক্রিয়</p>
-                <p className="text-xs text-rose-200/80 font-semibold">
+                <p className="text-xs sm:text-sm font-black text-rose-800">সাবস্ক্রিপশন মেয়াদোত্তীর্ণ বা নিষ্ক্রিয়</p>
+                <p className="text-xs text-rose-600 font-semibold">
                   বর্তমানে আপনার মেসটি রিড-অনলি মোডে রয়েছে। প্ল্যান রেনিউ করে ডেটা এডিটিং সচল করুন।
                 </p>
               </div>
@@ -179,8 +204,8 @@ export default function SubscriptionPage() {
           )}
 
           {pendingReq && (
-            <div className="flex items-center gap-2.5 bg-amber-500/20 border border-amber-400/40 px-5 py-3 rounded-2xl text-xs text-amber-200 font-bold backdrop-blur-md">
-              <Clock className="w-4 h-4 animate-spin text-amber-300" />
+            <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-100 px-5 py-3 rounded-2xl text-xs text-amber-800 font-bold">
+              <Clock className="w-4 h-4 animate-spin text-amber-600" />
               <span>একটি পেমেন্ট রিকোয়েস্ট (TrxID: {pendingReq.trxId}) অ্যাডমিন অনুমোদনের অপেক্ষায় আছে</span>
             </div>
           )}
@@ -203,7 +228,7 @@ export default function SubscriptionPage() {
                   {BKASH_NAGAD_NUMBER}
                 </h2>
                 <p className="text-xs text-slate-500 font-medium">
-                  উপরে উল্লেখিত নম্বরে bKash অথবা Nagad অ্যাপ থেকে Send Money সম্পন্ন করুন এবং TrxID দিয়ে ডানপাশের ফর্ম পূরণ করুন।
+                  উপরে উল্লেখিত নম্বরে bKash অথবা Nagad অ্যাপ থেকে Send Money সম্পন্ন করুন এবং TrxID দিয়ে নিচে ফর্ম পূরণ করুন।
                 </p>
               </div>
 
@@ -213,7 +238,7 @@ export default function SubscriptionPage() {
                 className={`px-6 py-4 rounded-2xl font-black text-xs flex items-center gap-2 transition-all shadow-md whitespace-nowrap ${
                   copied
                     ? 'bg-emerald-600 text-white shadow-emerald-200'
-                    : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
                 }`}
               >
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -271,6 +296,66 @@ export default function SubscriptionPage() {
             </div>
           </div>
 
+          {/* Super Admin Direct Message & Conversation Box */}
+          {pendingReq && (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 text-indigo-700 font-extrabold text-sm">
+                  <MessageSquare className="w-5 h-5 text-indigo-600" />
+                  <span>সুপার অ্যাডমিন সাপোর্ট ও মেসেজিং ডায়ালগ</span>
+                </div>
+                <span className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-extrabold rounded-xl border border-amber-100">
+                  TrxID: {pendingReq.trxId}
+                </span>
+              </div>
+
+              {/* Message List */}
+              <div className="space-y-3 max-h-60 overflow-y-auto p-2 scrollbar-thin">
+                {pendingReq.messages && pendingReq.messages.length > 0 ? (
+                  pendingReq.messages.map((m: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className={`p-3.5 rounded-2xl text-xs space-y-1 max-w-md ${
+                        m.senderRole === 'Super Admin'
+                          ? 'bg-indigo-50 border border-indigo-100 text-indigo-900 self-start'
+                          : 'bg-slate-100 border border-slate-200 text-slate-800 ml-auto'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-4 font-bold text-[10px] text-slate-400">
+                        <span>{m.senderName} ({m.senderRole})</span>
+                        <span>{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className="font-semibold">{m.text}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-xs text-slate-400 font-medium py-4">
+                    সুপার অ্যাডমিনের সাথে এখনো কোনো মেসেজ আদান-প্রদান হয়নি। কোনো প্রশ্ন বা টাকা কম থাকলে নিচে লিখে মেসেজ পাঠান।
+                  </p>
+                )}
+              </div>
+
+              {/* Reply Input Form */}
+              <form onSubmit={handleSendUserMessage} className="flex gap-2 pt-2">
+                <input
+                  type="text"
+                  placeholder="সুপার অ্যাডমিনকে বার্তা বা উত্তর লিখুন..."
+                  value={userMsgText}
+                  onChange={(e) => setUserMsgText(e.target.value)}
+                  className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="submit"
+                  disabled={sendingMsg || !userMsgText.trim()}
+                  className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-xs flex items-center gap-1.5 disabled:opacity-50 transition-all shadow-md shadow-indigo-100"
+                >
+                  {sendingMsg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  পাঠান
+                </button>
+              </form>
+            </div>
+          )}
+
           {/* Feature Comparison Matrix: Free vs VIP Premium */}
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -312,7 +397,7 @@ export default function SubscriptionPage() {
                 </div>
                 <ul className="space-y-2 text-xs text-slate-800 font-semibold">
                   <li className="flex items-center gap-2 text-slate-800">
-                    <span className="text-emerald-600 font-black">✓</span> মিল হিসাব আনলিমিটেড যোগ ও লাইব এডিট
+                    <span className="text-emerald-600 font-black">✓</span> মিল হিসাব আনলিমিটেড যোগ ও লাইভ এডিট
                   </li>
                   <li className="flex items-center gap-2 text-slate-800">
                     <span className="text-emerald-600 font-black">✓</span> বাজার ও লেনদেনের ইনস্ট্যান্ট ক্যাশবুক
@@ -321,7 +406,7 @@ export default function SubscriptionPage() {
                     <span className="text-emerald-600 font-black">✓</span> নোটিশ বোর্ড, চ্যাট ও বাজার শিডিউল সচল
                   </li>
                   <li className="flex items-center gap-2 text-slate-800">
-                    <span className="text-emerald-600 font-black">✓</span> 0ms ফার্স্ট স্পিড এবং ক্লাউড ব্যাকআপ
+                    <span className="text-emerald-600 font-black">✓</span> 0ms ফাস্ট স্পিড এবং ক্লাউড ব্যাকআপ
                   </li>
                 </ul>
               </div>

@@ -10,6 +10,12 @@ export interface ISubscriptionRequest extends Document {
   months: number;
   status: 'Pending' | 'Approved' | 'Rejected';
   adminNote?: string;
+  messages?: Array<{
+    senderRole: 'Super Admin' | 'User';
+    senderName: string;
+    text: string;
+    createdAt: Date;
+  }>;
   createdAt: Date;
   approvedAt?: Date;
 }
@@ -24,6 +30,12 @@ const SubscriptionRequestSchema: Schema = new Schema({
   months: { type: Number, required: true, default: 1 },
   status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending', index: true },
   adminNote: { type: String },
+  messages: [{
+    senderRole: { type: String, enum: ['Super Admin', 'User'], required: true },
+    senderName: { type: String, required: true },
+    text: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+  }],
   createdAt: { type: Date, default: Date.now },
   approvedAt: { type: Date }
 });
