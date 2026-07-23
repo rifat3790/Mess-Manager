@@ -40,7 +40,14 @@ import {
   Upload,
   Folder,
   Download,
-  Edit2
+  Edit2,
+  Building2,
+  Megaphone,
+  Send,
+  RefreshCw,
+  UserCheck,
+  ShieldAlert,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -65,7 +72,15 @@ import {
 } from './actions/dataActions';
 import { getBazaarSchedules, getBazaarChecklist, addBazaarChecklistItem, toggleBazaarChecklistItem, deleteBazaarChecklistItem } from './actions/bazaarActions';
 import { getNotifications } from './actions/notificationActions';
-import { getContacts, saveContact, deleteContact, getSuperAdminDashboardData } from './actions/adminActions';
+import { 
+  getContacts, 
+  saveContact, 
+  deleteContact, 
+  getSuperAdminDashboardData,
+  broadcastSystemAnnouncement,
+  updateMessStatus,
+  updateUserRoleAndPermissions
+} from './actions/adminActions';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 
@@ -93,6 +108,80 @@ export default function Home() {
   const [superAdminData, setSuperAdminData] = useState<any>(null);
   const [superAdminLoading, setSuperAdminLoading] = useState(true);
   const [superAdminSearch, setSuperAdminSearch] = useState('');
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [saBroadcastTitle, setSaBroadcastTitle] = useState('');
+  const [saBroadcastMessage, setSaBroadcastMessage] = useState('');
+  const [saBroadcastTarget, setSaBroadcastTarget] = useState('ALL');
+  const [saBroadcasting, setSaBroadcasting] = useState(false);
+  const [saEditingUserId, setSaEditingUserId] = useState<string | null>(null);
+  const [saSelectedRole, setSaSelectedRole] = useState<'Super Admin' | 'Manager' | 'Member' | 'Pending'>('Member');
+  const [saRoleLoading, setSaRoleLoading] = useState(false);
+  const [saMessLoading, setSaMessLoading] = useState<Record<string, boolean>>({});
+
+  const handleSABroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!saBroadcastTitle.trim() || !saBroadcastMessage.trim() || !mongoUser?._id) {
+      toast.error("শিরোনাম এবং মেসেজ ফিল্ড পূরণ করুন!");
+      return;
+    }
+    try {
+      setSaBroadcasting(true);
+      const res = await broadcastSystemAnnouncement(mongoUser._id, saBroadcastTitle, saBroadcastMessage, saBroadcastTarget);
+      if (res.success) {
+        toast.success("সিস্টেম-ওয়াইড ব্রডকাস্ট নোটিশ সেন্ড করা হয়েছে!");
+        setSaBroadcastTitle('');
+        setSaBroadcastMessage('');
+        setShowBroadcastModal(false);
+      } else {
+        toast.error(res.error || "নোটিশ সেন্ড করতে সমস্যা হয়েছে");
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaBroadcasting(false);
+    }
+  };
+
+  const handleSAToggleMessStatus = async (messId: string, currentStatus: string) => {
+    if (!mongoUser?._id) return;
+    const newStatus = currentStatus === 'Suspended' ? 'Active' : 'Suspended';
+    try {
+      setSaMessLoading(prev => ({ ...prev, [messId]: true }));
+      const res = await updateMessStatus(mongoUser._id, messId, newStatus);
+      if (res.success) {
+        toast.success(`মেস স্ট্যাটাস ${newStatus} করা হয়েছে`);
+        const updatedData = await getSuperAdminDashboardData(mongoUser._id);
+        if (updatedData.success) setSuperAdminData(updatedData);
+      } else {
+        toast.error(res.error || "স্ট্যাটাস আপডেট ব্যর্থ");
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaMessLoading(prev => ({ ...prev, [messId]: false }));
+    }
+  };
+
+  const handleSAUpdateRole = async (targetUserId: string) => {
+    if (!mongoUser?._id) return;
+    try {
+      setSaRoleLoading(true);
+      const res = await updateUserRoleAndPermissions(mongoUser._id, targetUserId, saSelectedRole);
+      if (res.success) {
+        toast.success("ইউজার রোল সফলভাবে আপডেট করা হয়েছে!");
+        setSaEditingUserId(null);
+        const updatedData = await getSuperAdminDashboardData(mongoUser._id);
+        if (updatedData.success) setSuperAdminData(updatedData);
+      } else {
+        toast.error(res.error || "রোল আপডেট ব্যর্থ");
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaRoleLoading(false);
+    }
+  };
+
   const [myStats, setMyStats] = useState<any>(initialCache?.myStats || null);
   const [allMembers, setAllMembers] = useState<any[]>(initialCache?.allMembers || []);
   const [bazaarSchedules, setBazaarSchedules] = useState<any[]>(initialCache?.bazaarSchedules || []);
@@ -873,7 +962,6 @@ export default function Home() {
       u.email.toLowerCase().includes(superAdminSearch.toLowerCase())
     ) || [];
 
-    // Calculate user role distribution
     const totalUsersCount = superAdminData?.usersCount || 0;
     const managersCount = superAdminData?.users?.filter((u: any) => u.role === 'Manager').length || 0;
     const membersCount = superAdminData?.users?.filter((u: any) => u.role === 'Member').length || 0;
@@ -889,91 +977,126 @@ export default function Home() {
 
     return (
       <div className="w-full space-y-8 pb-16">
-        {/* Elegant Header */}
-        <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none">
-            <Crown className="w-48 h-48 text-indigo-900" />
+        {/* VIP Luxury Header Banner */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 text-white p-8 shadow-2xl border border-indigo-800/40">
+          <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
+            <Crown className="w-64 h-64 text-indigo-400 animate-pulse" />
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 bg-indigo-50 text-indigo-650 text-xs font-bold rounded-full border border-indigo-100/60 uppercase tracking-widest">
-                সুপার অ্যাডমিন প্যানেল
-              </span>
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="px-3.5 py-1 bg-indigo-500/20 text-indigo-300 text-xs font-black rounded-full border border-indigo-400/30 uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-md">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  VIP Super Admin Command Center
+                </span>
+                <span className="flex h-2.5 w-2.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+                স্বাগতম VIP, <span className="bg-gradient-to-r from-indigo-300 via-white to-indigo-200 bg-clip-text text-transparent">{mongoUser.name}</span>
+              </h1>
+              <p className="text-indigo-200/80 text-xs sm:text-sm font-medium">অ্যাপ্লিকেশনের লাইভ গ্লোবাল মনিটরিং হাব, ক্যাশফ্লো এবং সম্পূর্ণ সিস্টেম কন্ট্রোল প্যানেল</p>
             </div>
-            <h1 className="text-3xl font-black bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-700 bg-clip-text text-transparent">
-              স্বাগতম, {mongoUser.name}
-            </h1>
-            <p className="text-slate-500 text-sm font-medium">অ্যাপ্লিকেশনের গ্লোবাল মনিটরিং হাব এবং সম্পূর্ণ সিস্টেম এনালাইটিক্স</p>
-          </div>
-          
-          <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 p-4 rounded-2xl">
-            <div className="w-12 h-12 bg-white text-indigo-600 rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
-              <Crown className="w-6 h-6 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 font-bold">লগইন অ্যাকাউন্ট</p>
-              <p className="text-sm font-bold text-slate-800">{mongoUser.email}</p>
+            
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={() => setShowBroadcastModal(true)}
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-2xl text-xs transition-all flex items-center gap-2 shadow-lg shadow-amber-500/20"
+              >
+                <Megaphone className="w-4 h-4 text-slate-950" />
+                📢 ব্রডকাস্ট নোটিশ
+              </button>
+              <button
+                onClick={() => {
+                  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(superAdminData, null, 2));
+                  const downloadAnchor = document.createElement('a');
+                  downloadAnchor.setAttribute("href", dataStr);
+                  downloadAnchor.setAttribute("download", `system-audit-report-${new Date().toISOString().split('T')[0]}.json`);
+                  document.body.appendChild(downloadAnchor);
+                  downloadAnchor.click();
+                  downloadAnchor.remove();
+                  toast.success("অডিট রিপোর্ট ডাউনলোড হয়েছে!");
+                }}
+                className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-extrabold rounded-2xl text-xs transition-all flex items-center gap-2 backdrop-blur-md border border-white/10"
+              >
+                <Download className="w-4 h-4 text-indigo-300" />
+                অডিট রিপোর্ট
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* System Scale & Cashflow Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Total Messes Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+          <div className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-100 flex items-center justify-between hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">মোট মেস সংখ্যা</span>
-              <h2 className="text-3xl font-black text-gray-850">{superAdminData?.messesCount || 0} টি</h2>
-              <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                <span>●</span> সক্রিয় মেস সমূহের মোট সংখ্যা
+              <span className="text-xs font-black text-slate-400 uppercase tracking-wider">মোট মেস সংখ্যা</span>
+              <h2 className="text-3xl font-black text-gray-900">{superAdminData?.messesCount || 0} টি</h2>
+              <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                <span>●</span> {superAdminData?.messes?.filter((m: any) => m.status !== 'Suspended').length || 0} টি মেস সচল
               </p>
             </div>
-            <div className="w-14 h-14 bg-indigo-50 text-indigo-650 rounded-2xl flex items-center justify-center">
-              <Sparkles className="w-7 h-7" />
+            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm">
+              <Building2 className="w-7 h-7" />
             </div>
           </div>
 
           {/* Total Registered Users Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+          <div className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-100 flex items-center justify-between hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">মোট নিবন্ধিত ইউজার</span>
-              <h2 className="text-3xl font-black text-gray-850">{superAdminData?.usersCount || 0} জন</h2>
-              <p className="text-[10px] text-slate-505 font-semibold">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-wider">মোট নিবন্ধিত ইউজার</span>
+              <h2 className="text-3xl font-black text-gray-900">{superAdminData?.usersCount || 0} জন</h2>
+              <p className="text-[10px] text-indigo-600 font-bold">
                 ম্যানেজার: {managersCount} | মেম্বার: {membersCount}
               </p>
             </div>
-            <div className="w-14 h-14 bg-emerald-50 text-emerald-650 rounded-2xl flex items-center justify-center">
+            <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-sm">
               <Users className="w-7 h-7" />
             </div>
           </div>
 
-          {/* Storage Capacity Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
-            <div className="space-y-1 w-full mr-4">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">ডাটাবেজ স্টোরেজ ব্যবহৃত</span>
-              <h2 className="text-3xl font-black text-gray-855">{superAdminData?.dbStats?.percentUsed || '0.00'}%</h2>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden mt-1">
-                <div 
-                  className="h-full rounded-full bg-amber-500 transition-all duration-500"
-                  style={{ width: `${superAdminData?.dbStats?.percentUsed || 0}%` }}
-                />
-              </div>
+          {/* Platform Total Cashflow Card */}
+          <div className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-100 flex items-center justify-between hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
+            <div className="space-y-1">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-wider">প্ল্যাটফর্ম ক্যাশফ্লো জমা</span>
+              <h2 className="text-2xl font-black text-emerald-600">৳{(superAdminData?.systemTotals?.totalDeposits || 0).toLocaleString()}</h2>
+              <p className="text-[10px] text-emerald-600 font-bold">
+                গ্লোবাল জমা ফ্লো
+              </p>
             </div>
-            <div className="w-14 h-14 bg-amber-50 text-amber-655 rounded-2xl flex items-center justify-center flex-shrink-0">
-              <Activity className="w-7 h-7" />
+            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-sm">
+              <Coins className="w-7 h-7" />
+            </div>
+          </div>
+
+          {/* Total System Meals Counter */}
+          <div className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-100 flex items-center justify-between hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
+            <div className="space-y-1">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-wider">মোট পরিবেশনকৃত মিল</span>
+              <h2 className="text-2xl font-black text-amber-600">{(superAdminData?.systemTotals?.totalMeals || 0).toLocaleString()} টি</h2>
+              <p className="text-[10px] text-amber-600 font-bold">
+                সমগ্র প্ল্যাটফর্ম মিল কাউন্ট
+              </p>
+            </div>
+            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shadow-sm">
+              <Utensils className="w-7 h-7" />
             </div>
           </div>
         </div>
 
         {/* User Role Distribution Section */}
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-805">ইউজার রোল বন্টন (Role Distribution)</h3>
-            <p className="text-xs text-slate-450 mt-0.5">নিবন্ধিত ব্যবহারকারীদের ভূমিকার অনুপাত</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-black text-slate-800">ইউজার রোল অনুপাত (Global Role Distribution)</h3>
+              <p className="text-xs text-slate-400 font-medium mt-0.5">নিবন্ধিত ব্যবহারকারীদের ভূমিকার লাইভ গ্রাফিক্যাল বন্টন</p>
+            </div>
+            <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-100">
+              মোট: {totalUsersCount} জন ইউজার
+            </span>
           </div>
           
           <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex">
@@ -994,23 +1117,23 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex flex-wrap gap-4 text-xs font-bold text-slate-600 pt-1">
-            <span className="flex items-center gap-1.5">
+          <div className="flex flex-wrap gap-6 text-xs font-bold text-slate-600 pt-1">
+            <span className="flex items-center gap-2">
               <span className="w-3 h-3 bg-indigo-500 rounded-full" />
               ম্যানেজার: {managersCount} জন ({managerPercent.toFixed(1)}%)
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-2">
               <span className="w-3 h-3 bg-emerald-500 rounded-full" />
               মেম্বার: {membersCount} জন ({memberPercent.toFixed(1)}%)
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-2">
               <span className="w-3 h-3 bg-amber-500 rounded-full" />
               পেন্ডিং: {pendingCount} জন ({pendingPercent.toFixed(1)}%)
             </span>
           </div>
         </div>
 
-        {/* Database Stats & Diagnostics */}
+        {/* Database Stats & System Diagnostics */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* DB details */}
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
@@ -1065,11 +1188,7 @@ export default function Home() {
               </div>
               <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">অবশিষ্ট স্পেস</span>
-                <span className="text-lg font-black text-slate-850 mt-1 truncate" title={
-                  firebaseFreeSpaceBytes > 1024 * 1024 * 1024 
-                    ? `${(firebaseFreeSpaceBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-                    : `${(firebaseFreeSpaceBytes / (1024 * 1024)).toFixed(1)} MB`
-                }>
+                <span className="text-lg font-black text-slate-850 mt-1 truncate">
                   {firebaseFreeSpaceBytes > 1024 * 1024 * 1024 
                     ? `${(firebaseFreeSpaceBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
                     : `${(firebaseFreeSpaceBytes / (1024 * 1024)).toFixed(1)} MB`
@@ -1078,11 +1197,7 @@ export default function Home() {
               </div>
               <div className="bg-slate-50 border border-slate-100/50 p-4 rounded-2xl flex flex-col justify-between">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">ব্যবহৃত স্পেস</span>
-                <span className="text-lg font-black text-slate-850 mt-1 truncate" title={
-                  totalFirebaseUsedBytes > 1024 * 1024 
-                    ? `${(totalFirebaseUsedBytes / (1024 * 1024)).toFixed(2)} MB`
-                    : `${(totalFirebaseUsedBytes / 1024).toFixed(1)} KB`
-                }>
+                <span className="text-lg font-black text-slate-850 mt-1 truncate">
                   {totalFirebaseUsedBytes > 1024 * 1024 
                     ? `${(totalFirebaseUsedBytes / (1024 * 1024)).toFixed(2)} MB`
                     : `${(totalFirebaseUsedBytes / 1024).toFixed(1)} KB`
@@ -1091,7 +1206,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Storage Progress bar */}
             <div className="space-y-1.5 pt-1">
               <div className="flex justify-between items-center text-[10px] font-bold text-slate-400">
                 <span>স্টোরেজ ব্যবহারের হার</span>
@@ -1106,42 +1220,42 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Configurations */}
+          {/* System Configurations */}
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-              <h3 className="text-sm font-bold text-slate-800">সিস্টেম কনফিগারেশন ও ডায়াগনস্টিকস</h3>
-              <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-600 text-[10px] font-bold rounded-full">
-                কনফিগারড
+              <h3 className="text-sm font-bold text-slate-800">সিস্টেম ডায়াগনস্টিকস ও সার্ভিসেস</h3>
+              <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-600 text-[10px] font-bold rounded-full">
+                সকল সার্ভিস ওকে
               </span>
             </div>
 
             <div className="space-y-3 pt-1">
               <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                <span>অ্যাপ্লিকেশন স্ট্যাটাস</span>
-                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">রানিং (স্বাভাবিক)</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                <span>নতুন ইউজার রেজিস্ট্রেশন</span>
-                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">উন্মুক্ত</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                <span>রিয়েল-টাইম নোটিফিকেশন</span>
+                <span>অ্যাপ্লিকেশন ইঞ্জিন (Next.js Turbo)</span>
                 <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">সক্রিয়</span>
               </div>
               <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                <span>মেইল সার্ভিস (SMTP Status)</span>
+                <span>MongoDB ক্লাউড সংযোগ</span>
+                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">অনলাইন</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                <span>রিয়েল-টাইম পুশ ইঞ্জিন</span>
+                <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">সক্রিয়</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                <span>ফায়ারবেস স্টোরেজ বাকেট</span>
                 <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">অনলাইন</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Global Search and Listings Container */}
+        {/* Global Master Database Tables */}
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-base font-extrabold text-slate-805">অ্যাপ্লিকেশন মাস্টার ডেটাবেজ</h3>
-              <p className="text-xs text-slate-400 font-bold mt-0.5">সিস্টেমে থাকা সকল মেস ও মেম্বারদের লাইভ ডেটা</p>
+              <h3 className="text-base font-extrabold text-slate-900">অ্যাপ্লিকেশন মাস্টার ডেটাবেজ ও রোল কন্ট্রোল</h3>
+              <p className="text-xs text-slate-400 font-bold mt-0.5">মেস স্ট্যাটাস এবং গ্লোবাল ইউজার পারমিশন কন্ট্রোল প্যানেল</p>
             </div>
             
             {/* Real-time search bar */}
@@ -1161,7 +1275,7 @@ export default function Home() {
             {/* Messes Column */}
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <span className="text-xs font-bold text-slate-500">মেস তালিকা ({filteredMesses.length} টি পাওয়া গেছে)</span>
+                <span className="text-xs font-black text-slate-500">মেস তালিকা ({filteredMesses.length} টি)</span>
               </div>
 
               <div className="overflow-x-auto">
@@ -1171,6 +1285,7 @@ export default function Home() {
                       <th className="px-4 py-3">মেস তথ্য</th>
                       <th className="px-4 py-3 text-center">মেম্বার</th>
                       <th className="px-4 py-3">কোড</th>
+                      <th className="px-4 py-3 text-right">অ্যাকশন</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1188,11 +1303,24 @@ export default function Home() {
                         <td className="px-4 py-3 font-mono font-bold text-indigo-600">
                           {m.code}
                         </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => handleSAToggleMessStatus(m._id, m.status)}
+                            disabled={saMessLoading[m._id]}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all disabled:opacity-50 ${
+                              m.status === 'Suspended'
+                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100'
+                            }`}
+                          >
+                            {saMessLoading[m._id] ? '...' : m.status === 'Suspended' ? 'সচল' : 'সাসপেন্ড'}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                     {filteredMesses.length === 0 && (
                       <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-slate-400 font-bold">কোনো মেস পাওয়া যায়নি।</td>
+                        <td colSpan={4} className="px-4 py-8 text-center text-slate-400 font-bold">কোনো মেস পাওয়া যায়নি।</td>
                       </tr>
                     )}
                   </tbody>
