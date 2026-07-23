@@ -13,6 +13,7 @@ import BazaarChecklist from "@/models/BazaarChecklist";
 import ChatMessage from "@/models/ChatMessage";
 import MealRequest from "@/models/MealRequest";
 import Mess from "@/models/Mess";
+import SubscriptionRequest from "@/models/SubscriptionRequest";
 import mongoose from "mongoose";
 
 export async function wipeDatabase(confirmationCode: string, adminUserId: string) {
@@ -315,7 +316,7 @@ export async function getSuperAdminDashboardData(adminUserId: string) {
       return { success: false, error: 'Unauthorized.' };
     }
 
-    const [messesCount, usersCount, messes, users, dbStatsRes, totalMealsRes, totalDepositsRes, totalExpensesRes] = await Promise.all([
+    const [messesCount, usersCount, messes, users, dbStatsRes, totalMealsRes, totalDepositsRes, totalExpensesRes, subRequests] = await Promise.all([
       Mess.countDocuments(),
       User.countDocuments(),
       Mess.find().populate('creatorId', 'name email').sort({ createdAt: -1 }).lean(),
@@ -323,7 +324,12 @@ export async function getSuperAdminDashboardData(adminUserId: string) {
       getDatabaseStats(),
       Meal.aggregate([{ $group: { _id: null, sum: { $sum: '$mealCount' } } }]),
       Deposit.aggregate([{ $group: { _id: null, sum: { $sum: '$amount' } } }]),
-      Expense.aggregate([{ $group: { _id: null, sum: { $sum: '$amount' } } }])
+      Expense.aggregate([{ $group: { _id: null, sum: { $sum: '$amount' } } }]),
+      SubscriptionRequest.find()
+        .populate('messId', 'name code status subscriptionStatus subscriptionExpiresAt')
+        .populate('userId', 'name email role')
+        .sort({ createdAt: -1 })
+        .lean()
     ]);
 
     const systemTotalMeals = totalMealsRes[0]?.sum || 0;
@@ -358,6 +364,7 @@ export async function getSuperAdminDashboardData(adminUserId: string) {
       },
       messes: JSON.parse(JSON.stringify(populatedMesses)),
       users: JSON.parse(JSON.stringify(users)),
+      subscriptionRequests: JSON.parse(JSON.stringify(subRequests)),
       dbStats: dbStatsRes.success ? dbStatsRes.stats : null
     };
   } catch (error: any) {

@@ -8,8 +8,8 @@ import { createNotification } from "./notificationActions";
 import { revalidatePath } from "next/cache";
 
 export async function submitSubscriptionRequest(
-  userId: string,
-  messId: string,
+  userId: string | any,
+  messId: string | any,
   paymentMethod: 'bKash' | 'Nagad' | 'Rocket',
   senderPhone: string,
   trxId: string,
@@ -18,6 +18,17 @@ export async function submitSubscriptionRequest(
 ) {
   try {
     await connectToDatabase();
+
+    // Register models
+    if (!Mess) {}
+    if (!User) {}
+
+    const resolvedUserId = typeof userId === 'object' && userId?._id ? userId._id.toString() : userId?.toString();
+    const resolvedMessId = typeof messId === 'object' && messId?._id ? messId._id.toString() : messId?.toString();
+
+    if (!resolvedUserId || !resolvedMessId) {
+      return { success: false, error: "ইউজার অথবা মেস আইডি পাওয়া যায়নি।" };
+    }
 
     if (!senderPhone || !trxId || !amount || !months) {
       return { success: false, error: "সকল প্রয়োজনীয় তথ্য পূরণ করুন।" };
@@ -37,8 +48,8 @@ export async function submitSubscriptionRequest(
     }
 
     const request = await SubscriptionRequest.create({
-      messId,
-      userId,
+      messId: resolvedMessId,
+      userId: resolvedUserId,
       paymentMethod,
       senderPhone: cleanPhone,
       trxId: cleanTrxId,
@@ -66,11 +77,15 @@ export async function submitSubscriptionRequest(
   }
 }
 
-export async function getSubscriptionRequests(adminUserId: string) {
+export async function getSubscriptionRequests(adminUserId: string | any) {
   try {
     await connectToDatabase();
     
-    const admin = await User.findById(adminUserId).lean();
+    if (!Mess) {}
+    if (!User) {}
+
+    const resolvedAdminId = typeof adminUserId === 'object' && adminUserId?._id ? adminUserId._id.toString() : adminUserId?.toString();
+    const admin = await User.findById(resolvedAdminId).lean();
     if (!admin || admin.role !== 'Super Admin') {
       return { success: false, error: 'অনুমতি নেই (Super Admin Required)' };
     }
@@ -193,15 +208,16 @@ export async function rejectSubscriptionRequest(
   }
 }
 
-export async function getMessSubscriptionDetails(messId: string) {
+export async function getMessSubscriptionDetails(messId: string | any) {
   try {
     await connectToDatabase();
 
-    const mess = await Mess.findById(messId).lean();
+    const resolvedMessId = typeof messId === 'object' && messId?._id ? messId._id.toString() : messId?.toString();
+    const mess = await Mess.findById(resolvedMessId).lean();
     if (!mess) return { success: false, error: 'মেস পাওয়া যায়নি' };
 
     const pendingRequest = await SubscriptionRequest.findOne({
-      messId,
+      messId: resolvedMessId,
       status: 'Pending'
     }).sort({ createdAt: -1 }).lean();
 
@@ -227,6 +243,56 @@ export async function getMessSubscriptionDetails(messId: string) {
         pendingRequest: pendingRequest ? JSON.parse(JSON.stringify(pendingRequest)) : null
       }
     };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function grantMessSubscription(
+  adminUserId: string | any,
+  messId: string | any,
+  months: number
+) {
+  try {
+    await connectToDatabase();
+
+    const resolvedAdminId = typeof adminUserId === 'object' && adminUserId?._id ? adminUserId._id.toString() : adminUserId?.toString();
+    const admin = await User.findById(resolvedAdminId).lean();
+    if (!admin || admin.role !== 'Super Admin') {
+      return { success: false, error: 'অনুমতি নেই (Super Admin Required)' };
+    }
+
+    const resolvedMessId = typeof messId === 'object' && messId?._id ? messId._id.toString() : messId?.toString();
+    const mess = await Mess.findById(resolvedMessId);
+    if (!mess) {
+      return { success: false, error: 'মেস পাওয়া যায়নি।' };
+    }
+
+    const now = new Date();
+    let startDate = now;
+    if (mess.subscriptionExpiresAt && new Date(mess.subscriptionExpiresAt) > now) {
+      startDate = new Date(mess.subscriptionExpiresAt);
+    }
+
+    const daysToAdd = months * 31;
+    const expiresAt = new Date(startDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+
+    mess.subscriptionStatus = 'Active';
+    mess.subscriptionExpiresAt = expiresAt;
+    mess.subscriptionPlanMonths = months;
+    await mess.save();
+
+    const formattedExpiry = expiresAt.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
+    await createNotification(
+      "👑 মেস সাবস্ক্রিপশন সচল করা হয়েছে!",
+      `সুপার অ্যাডমিন কর্তৃক আপনার মেসে ${months} মাসের প্রিমিয়াম সাবস্ক্রিপশন সচল করা হয়েছে! মেয়াদ শেষ হবে: ${formattedExpiry}।`,
+      undefined,
+      resolvedMessId
+    );
+
+    revalidatePath('/', 'layout');
+    revalidatePath('/subscription');
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
