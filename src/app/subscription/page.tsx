@@ -414,81 +414,122 @@ export default function SubscriptionPage() {
           </div>
         </div>
 
-        {/* Right 1 Column: Submission Form */}
+        {/* Right 1 Column: Submission Form or Pending Guard Card */}
         <div className="space-y-8">
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-6 sticky top-6">
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900">২. পেমেন্ট ভেরিফিকেশন ফর্ম</h3>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">টাকা পাঠানোর পর প্রেরক নম্বর ও TrxID লিখে সাবমিট করুন</p>
-            </div>
+            {pendingReq ? (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-amber-500 animate-spin" />
+                    আবেদন প্রক্রিয়াধীন
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5">আপনার রিকোয়েস্টটি অ্যাডমিন অনুমোদনের অপেক্ষায় আছে</p>
+                </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Payment Method Choice */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2">পেমেন্ট মেথড নির্বাচন করুন</label>
-                <div className="flex gap-2">
-                  {(['bKash', 'Nagad', 'Rocket'] as const).map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => setPaymentMethod(method)}
-                      className={`flex-1 py-3 px-2 rounded-2xl text-xs font-black transition-all border ${
-                        paymentMethod === method
-                          ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-sm'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {method === 'bKash' ? '💖 bKash' : method === 'Nagad' ? '🟧 Nagad' : '🚀 Rocket'}
-                    </button>
-                  ))}
+                <div className="bg-amber-50/80 border border-amber-200/70 rounded-2xl p-5 space-y-3">
+                  <div className="space-y-2 text-xs text-slate-800 font-semibold">
+                    <div className="flex justify-between items-center border-b border-amber-200/50 pb-2">
+                      <span className="text-slate-500">ট্রানজেকশন আইডি:</span>
+                      <span className="font-mono font-black text-indigo-700 bg-white px-2 py-0.5 rounded border border-amber-200">{pendingReq.trxId}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-amber-200/50 pb-2">
+                      <span className="text-slate-500">মেথড ও নম্বর:</span>
+                      <span className="font-bold text-slate-800">{pendingReq.paymentMethod} ({pendingReq.senderPhone})</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">প্ল্যান ও পরিমাণ:</span>
+                      <span className="font-black text-slate-900">{pendingReq.months} মাস (৳{pendingReq.amount})</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-600 font-medium space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-slate-800 font-extrabold">
+                    <Lock className="w-4 h-4 text-amber-600" />
+                    <span>পুনরায় আবেদন সাময়িকভাবে বন্ধ</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    একটি রিকোয়েস্ট পেন্ডিং থাকা অবস্থায় নতুন করে আর রিকোয়েস্ট পাঠানো যাবে না। অ্যাডমিন এটি এপ্রুভ বা রিজেক্ট করার পর অথবা মেসেজিং বক্সে কথা বলে সমাধান করা যাবে।
+                  </p>
                 </div>
               </div>
+            ) : (
+              <>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">২. পেমেন্ট ভেরিফিকেশন ফর্ম</h3>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5">টাকা পাঠানোর পর প্রেরক নম্বর ও TrxID লিখে সাবমিট করুন</p>
+                </div>
 
-              {/* Sender Phone */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  প্রেরক ফোন নম্বর (Sender Number) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="যেমন: 017XXXXXXXX"
-                  value={senderPhone}
-                  onChange={(e) => setSenderPhone(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  {/* Payment Method Choice */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">পেমেন্ট মেথড নির্বাচন করুন</label>
+                    <div className="flex gap-2">
+                      {(['bKash', 'Nagad', 'Rocket'] as const).map((method) => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setPaymentMethod(method)}
+                          className={`flex-1 py-3 px-2 rounded-2xl text-xs font-black transition-all border ${
+                            paymentMethod === method
+                              ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-sm'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          {method === 'bKash' ? '💖 bKash' : method === 'Nagad' ? '🟧 Nagad' : '🚀 Rocket'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              {/* TrxID */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  ট্রানজেকশন আইডি (TrxID) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="যেমন: 9J8K7L6M"
-                  value={trxId}
-                  onChange={(e) => setTrxId(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase"
-                />
-              </div>
+                  {/* Sender Phone */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      প্রেরক ফোন নম্বর (Sender Number) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="যেমন: 017XXXXXXXX"
+                      value={senderPhone}
+                      onChange={(e) => setSenderPhone(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
 
-              {/* Plan Summary Bar */}
-              <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between text-xs font-bold text-indigo-900">
-                <span>নির্বাচিত প্ল্যান: {selectedPlan.months} মাস</span>
-                <span className="text-sm font-black text-indigo-700">মোট পরিদেয়: ৳{selectedPlan.price}</span>
-              </div>
+                  {/* TrxID */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      ট্রানজেকশন আইডি (TrxID) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="যেমন: 9J8K7L6M"
+                      value={trxId}
+                      onChange={(e) => setTrxId(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase"
+                    />
+                  </div>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 disabled:opacity-50 transition-all"
-              >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                পেমেন্ট রিকোয়েস্ট নিশ্চিত করুন
-              </button>
-            </form>
+                  {/* Plan Summary Bar */}
+                  <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between text-xs font-bold text-indigo-900">
+                    <span>নির্বাচিত প্ল্যান: {selectedPlan.months} মাস</span>
+                    <span className="text-sm font-black text-indigo-700">মোট পরিদেয়: ৳{selectedPlan.price}</span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 disabled:opacity-50 transition-all"
+                  >
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    পেমেন্ট রিকোয়েস্ট নিশ্চিত করুন
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         </div>
       </div>

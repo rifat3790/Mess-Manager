@@ -37,14 +37,19 @@ export async function submitSubscriptionRequest(
     const cleanTrxId = trxId.trim().toUpperCase();
     const cleanPhone = senderPhone.trim();
 
-    // Check for duplicate pending transaction ID
-    const existing = await SubscriptionRequest.findOne({
-      trxId: cleanTrxId,
-      status: 'Pending'
+    // Check if user or mess already has ANY pending subscription request
+    const existingPending = await SubscriptionRequest.findOne({
+      $or: [
+        { messId: resolvedMessId, status: 'Pending' },
+        { userId: resolvedUserId, status: 'Pending' }
+      ]
     });
 
-    if (existing) {
-      return { success: false, error: "এই ট্রানজেকশন আইডি (TrxID) দিয়ে ইতোমধ্যে একটি পেমেন্ট রিকোয়েস্ট পেন্ডিং আছে।" };
+    if (existingPending) {
+      return {
+        success: false,
+        error: `⚠️ আপনার ইতোমধ্যে একটি পেমেন্ট রিকোয়েস্ট (TrxID: ${existingPending.trxId}) পেন্ডিং রয়েছে! সুপার অ্যাডমিন সেটি অনুমোদন বা বাতিল না করা পর্যন্ত আবার আবেদন করা যাবে না।`
+      };
     }
 
     const request = await SubscriptionRequest.create({
