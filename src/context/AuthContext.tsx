@@ -9,7 +9,8 @@ export interface MongoUser {
   name: string;
   email: string;
   role: 'Super Admin' | 'Manager' | 'Member' | 'Pending';
-  messId?: string;
+  messId?: any;
+  messStatus?: 'Active' | 'Suspended';
   permissions?: {
     canManageMeals: boolean;
     canManageExpenses: boolean;

@@ -15,6 +15,7 @@ import { revalidatePath } from "next/cache";
 import Notice from "@/models/Notice";
 import Menu from "@/models/Menu";
 import MenuRating from "@/models/MenuRating";
+import Mess from "@/models/Mess";
 import { getBazaarSchedules, getBazaarChecklist } from './bazaarActions';
 import { getNotifications } from './notificationActions';
 import { getContacts } from './adminActions';
@@ -1490,6 +1491,28 @@ export async function getUnifiedDashboardData(userId: string) {
     if (!user || !user.messId) {
       return {
         success: true,
+        isSuspended: false,
+        dashboard: { stats: null, members: [] },
+        bazaarSchedules: [],
+        notifications: [],
+        contacts: [],
+        bazaarChecklist: [],
+        userMeals: null,
+        pendingRequests: [],
+        menu: null,
+        notices: [],
+        ratings: null
+      };
+    }
+
+    const mess = await Mess.findById(user.messId).lean();
+    if (mess && mess.status === 'Suspended' && user.role !== 'Super Admin') {
+      return {
+        success: true,
+        isSuspended: true,
+        messName: mess.name,
+        messCode: mess.code,
+        error: 'আপনার মেসটি সুপার অ্যাডমিন কর্তৃক স্থগিত (Suspended) রাখা হয়েছে।',
         dashboard: { stats: null, members: [] },
         bazaarSchedules: [],
         notifications: [],

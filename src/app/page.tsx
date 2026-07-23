@@ -118,6 +118,7 @@ export default function Home() {
   const [saRoleLoading, setSaRoleLoading] = useState(false);
   const [saMessLoading, setSaMessLoading] = useState<Record<string, boolean>>({});
   const [saActiveTab, setSaActiveTab] = useState<'overview' | 'messes' | 'users' | 'broadcast' | 'health'>('overview');
+  const [saMessFilter, setSaMessFilter] = useState<'ALL' | 'Active' | 'Suspended'>('ALL');
 
   const handleSABroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -953,10 +954,19 @@ export default function Home() {
       );
     }
 
+    const activeMessesCount = superAdminData?.messes?.filter((m: any) => m.status !== 'Suspended').length || 0;
+    const suspendedMessesCount = superAdminData?.messes?.filter((m: any) => m.status === 'Suspended').length || 0;
+
     const filteredMesses = superAdminData?.messes?.filter((m: any) => 
       m.name.toLowerCase().includes(superAdminSearch.toLowerCase()) || 
       m.code.toLowerCase().includes(superAdminSearch.toLowerCase())
     ) || [];
+
+    const displayMesses = filteredMesses.filter((m: any) => {
+      if (saMessFilter === 'Active') return m.status !== 'Suspended';
+      if (saMessFilter === 'Suspended') return m.status === 'Suspended';
+      return true;
+    });
 
     const filteredUsers = superAdminData?.users?.filter((u: any) => 
       u.name.toLowerCase().includes(superAdminSearch.toLowerCase()) || 
@@ -1242,10 +1252,46 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">নিবন্ধিত মেস ডিরেক্টরি</h3>
-                <p className="text-xs text-slate-400 font-bold mt-0.5">সিস্টেমে থাকা সকল মেস এবং তাদের অ্যাক্টিভ স্ট্যাটাস</p>
+                <p className="text-xs text-slate-400 font-bold mt-0.5">সিস্টেমে থাকা সকল মেস এবং তাদের সচল/সাসপেন্ড স্ট্যাটাস</p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSaMessFilter('ALL')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                    saMessFilter === 'ALL'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                  }`}
+                >
+                  🌐 সকল মেস ({superAdminData?.messesCount || 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSaMessFilter('Active')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                    saMessFilter === 'Active'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100'
+                  }`}
+                >
+                  ✅ সচল মেস ({activeMessesCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSaMessFilter('Suspended')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                    saMessFilter === 'Suspended'
+                      ? 'bg-rose-600 text-white shadow-sm'
+                      : 'bg-rose-50 text-rose-700 border border-rose-100 hover:bg-rose-100'
+                  }`}
+                >
+                  🚫 স্থগিত মেস ({suspendedMessesCount})
+                </button>
               </div>
               
-              <div className="relative w-full sm:w-80">
+              <div className="relative w-full sm:w-72">
                 <Search className="absolute left-4 top-3.5 w-4.5 h-4.5 text-slate-400" />
                 <input
                   type="text"
@@ -1269,10 +1315,21 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredMesses.map((m: any) => (
+                  {displayMesses.map((m: any) => (
                     <tr key={m._id} className="hover:bg-slate-50/50 transition-colors text-xs">
                       <td className="px-4 py-3.5 font-bold text-slate-800">
-                        {m.name}
+                        <div className="flex items-center gap-2">
+                          <span>{m.name}</span>
+                          {m.status === 'Suspended' ? (
+                            <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[10px] font-black rounded-md border border-rose-200">
+                              স্থগিত
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-md border border-emerald-200">
+                              সচল
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5 text-slate-600 font-medium">
                         {m.creatorId?.name || 'N/A'} ({m.creatorId?.email || 'N/A'})
@@ -1290,7 +1347,7 @@ export default function Home() {
                           type="button"
                           onClick={() => handleSAToggleMessStatus(m._id, m.status)}
                           disabled={saMessLoading[m._id]}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 ${
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 ${
                             m.status === 'Suspended'
                               ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
                               : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100'
@@ -1301,7 +1358,7 @@ export default function Home() {
                       </td>
                     </tr>
                   ))}
-                  {filteredMesses.length === 0 && (
+                  {displayMesses.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-4 py-12 text-center text-slate-400 font-bold">কোনো মেস পাওয়া যায়নি।</td>
                     </tr>
@@ -1460,6 +1517,43 @@ export default function Home() {
                   onChange={(e) => setSaBroadcastMessage(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+              </div>
+
+              {/* Quick Presets */}
+              <div className="space-y-2 pt-1">
+                <span className="text-xs font-bold text-slate-500">দ্রুত টেমপ্লেট নির্বাচন করুন (Quick Presets):</span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSaBroadcastTitle("জরুরি সিস্টেম মেইনটেন্যান্স ও আপগ্রেড");
+                      setSaBroadcastMessage("প্রিয় মেস ব্যবহারকারীগণ, সিস্টেম পারফরম্যান্স ও স্পিড বৃদ্ধির লক্ষ্যে আজ রাতে ১০ মিনিট সিস্টেম আপডেট চলবে। উক্ত সময়ে কিছু ফিচার সাময়িক ধীরগতির হতে পারে। সহযোগিতার জন্য ধন্যবাদ।");
+                    }}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-all"
+                  >
+                    🚀 মেইনটেন্যান্স নোটিশ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSaBroadcastTitle("মাসিক সাবস্ক্রিপশন ও প্ল্যাটফর্ম আপডেট");
+                      setSaBroadcastMessage("সবাইকে জানানো যাচ্ছে যে, চলতি মাসের মেস ব্যালেন্স ও হিসেব অপটিমাইজেশন সম্পন্ন হয়েছে। আপনার মেস ম্যানেজারকে অ্যাকাউন্ট ভেরিফাই করার জন্য অনুরোধ করা হচ্ছে।");
+                    }}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-all"
+                  >
+                    💳 সাবস্ক্রিপশন রিমাইন্ডার
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSaBroadcastTitle("নতুন সুপার ফাস্ট স্পিড আপডেট চালু!");
+                      setSaBroadcastMessage("অভিনন্দন! অ্যাপ্লিকেশনে 0ms ইনস্ট্যান্ট স্পিড ক্যাশিং এবং রিয়েল-টাইম পুশ ইঞ্জিন যুক্ত হয়েছে। এখন থেকে সকল ডেটা এবং মেসেজ তাৎক্ষণিকভাবে লোড হবে।");
+                    }}
+                    className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 transition-all"
+                  >
+                    ⚡ স্পিড আপডেট নোটিশ
+                  </button>
+                </div>
               </div>
 
               <div className="pt-2">
