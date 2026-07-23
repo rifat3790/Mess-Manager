@@ -240,6 +240,71 @@ export async function updateUserPermissions(
   }
 }
 
+export async function broadcastSystemAnnouncement(adminUserId: string, title: string, message: string, targetMessId?: string) {
+  try {
+    await connectToDatabase();
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || admin.role !== 'Super Admin') {
+      return { success: false, error: 'অনুমতি নেই (Super Admin Required)' };
+    }
+
+    const { createNotification } = await import('./notificationActions');
+
+    if (targetMessId && targetMessId !== 'ALL') {
+      await createNotification(`[সিস্টেম নোটিশ] ${title}`, message, undefined, targetMessId);
+    } else {
+      const allMesses = await Mess.find().select('_id').lean();
+      await Promise.all(
+        allMesses.map(m => createNotification(`[সিস্টেম নোটিশ] ${title}`, message, undefined, m._id.toString()))
+      );
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateMessStatus(adminUserId: string, messId: string, status: 'Active' | 'Suspended') {
+  try {
+    await connectToDatabase();
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || admin.role !== 'Super Admin') {
+      return { success: false, error: 'অনুমতি নেই (Super Admin Required)' };
+    }
+
+    const updated = await Mess.findByIdAndUpdate(messId, { status }, { new: true }).lean();
+    return { success: true, mess: JSON.parse(JSON.stringify(updated)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateUserRoleAndPermissions(
+  adminUserId: string,
+  targetUserId: string,
+  role: 'Super Admin' | 'Manager' | 'Member' | 'Pending',
+  permissions?: any
+) {
+  try {
+    await connectToDatabase();
+    const admin = await User.findById(adminUserId).lean();
+    if (!admin || admin.role !== 'Super Admin') {
+      return { success: false, error: 'অনুমতি নেই (Super Admin Required)' };
+    }
+
+    const updateData: any = { role };
+    if (permissions) {
+      updateData.permissions = permissions;
+    }
+
+    const updated = await User.findByIdAndUpdate(targetUserId, updateData, { new: true }).lean();
+    return { success: true, user: JSON.parse(JSON.stringify(updated)) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function getSuperAdminDashboardData(adminUserId: string) {
   try {
     await connectToDatabase();
@@ -250,13 +315,20 @@ export async function getSuperAdminDashboardData(adminUserId: string) {
       return { success: false, error: 'Unauthorized.' };
     }
 
-    const [messesCount, usersCount, messes, users, dbStatsRes] = await Promise.all([
+    const [messesCount, usersCount, messes, users, dbStatsRes, totalMealsRes, totalDepositsRes, totalExpensesRes] = await Promise.all([
       Mess.countDocuments(),
       User.countDocuments(),
       Mess.find().populate('creatorId', 'name email').sort({ createdAt: -1 }).lean(),
       User.find().populate('messId', 'name').sort({ createdAt: -1 }).lean(),
-      getDatabaseStats()
+      getDatabaseStats(),
+      Meal.aggregate([{ $group: { _id: null, sum: { $sum: '$mealCount' } } }]),
+      Deposit.aggregate([{ $group: { _id: null, sum: { $sum: '$amount' } } }]),
+      Expense.aggregate([{ $group: { _id: null, sum: { $sum: '$amount' } } }])
     ]);
+
+    const systemTotalMeals = totalMealsRes[0]?.sum || 0;
+    const systemTotalDeposits = totalDepositsRes[0]?.sum || 0;
+    const systemTotalExpenses = totalExpensesRes[0]?.sum || 0;
     
     // Group user counts by messId
     const userCounts = await User.aggregate([
@@ -271,6 +343,7 @@ export async function getSuperAdminDashboardData(adminUserId: string) {
 
     const populatedMesses = messes.map((m: any) => ({
       ...m,
+      status: m.status || 'Active',
       memberCount: userCountMap[m._id.toString()] || 0
     }));
 
@@ -278,6 +351,11 @@ export async function getSuperAdminDashboardData(adminUserId: string) {
       success: true,
       messesCount,
       usersCount,
+      systemTotals: {
+        totalMeals: systemTotalMeals,
+        totalDeposits: systemTotalDeposits,
+        totalExpenses: systemTotalExpenses
+      },
       messes: JSON.parse(JSON.stringify(populatedMesses)),
       users: JSON.parse(JSON.stringify(users)),
       dbStats: dbStatsRes.success ? dbStatsRes.stats : null

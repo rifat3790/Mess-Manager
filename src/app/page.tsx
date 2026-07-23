@@ -73,16 +73,29 @@ export default function Home() {
   const { user, mongoUser, loading: authLoading, messName } = useAuth();
   const router = useRouter();
   
-  const [dataLoading, setDataLoading] = useState(true);
-  const [globalStats, setGlobalStats] = useState<any>(null);
+  const getInitialCache = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_dashboard_cache_v2');
+        return cached ? JSON.parse(cached) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+  const initialCache = getInitialCache();
+
+  const [dataLoading, setDataLoading] = useState(!initialCache);
+  const [globalStats, setGlobalStats] = useState<any>(initialCache?.globalStats || null);
   
   // Super Admin States
   const [superAdminData, setSuperAdminData] = useState<any>(null);
   const [superAdminLoading, setSuperAdminLoading] = useState(true);
   const [superAdminSearch, setSuperAdminSearch] = useState('');
-  const [myStats, setMyStats] = useState<any>(null);
-  const [allMembers, setAllMembers] = useState<any[]>([]);
-  const [bazaarSchedules, setBazaarSchedules] = useState<any[]>([]);
+  const [myStats, setMyStats] = useState<any>(initialCache?.myStats || null);
+  const [allMembers, setAllMembers] = useState<any[]>(initialCache?.allMembers || []);
+  const [bazaarSchedules, setBazaarSchedules] = useState<any[]>(initialCache?.bazaarSchedules || []);
   
   // Daily Meals state
   const [myMeals, setMyMeals] = useState<{ today: any, tomorrow: any, pendingToday: any, pendingTomorrow: any } | null>(null);
@@ -445,23 +458,21 @@ export default function Home() {
       const cached = localStorage.getItem('mess_dashboard_cache_v2');
       if (cached) {
         const data = JSON.parse(cached);
-        setTimeout(() => {
-          if (data.globalStats) setGlobalStats(data.globalStats);
-          if (data.myStats) setMyStats(data.myStats);
-          if (data.allMembers) setAllMembers(data.allMembers);
-          if (data.bazaarSchedules) setBazaarSchedules(data.bazaarSchedules);
-          if (data.notifications) setNotifications(data.notifications);
-          if (data.contacts) setContacts(data.contacts);
-          if (data.bazaarChecklist) setBazaarChecklist(data.bazaarChecklist);
-          if (data.menu) {
-            setMenu(data.menu);
-            setMenuBreakfast(data.menu.breakfast || '');
-            setMenuLunch(data.menu.lunch || '');
-            setMenuDinner(data.menu.dinner || '');
-          }
-          if (data.notices) setNotices(data.notices);
-          setDataLoading(false);
-        }, 0);
+        if (data.globalStats) setGlobalStats(data.globalStats);
+        if (data.myStats) setMyStats(data.myStats);
+        if (data.allMembers) setAllMembers(data.allMembers);
+        if (data.bazaarSchedules) setBazaarSchedules(data.bazaarSchedules);
+        if (data.notifications) setNotifications(data.notifications);
+        if (data.contacts) setContacts(data.contacts);
+        if (data.bazaarChecklist) setBazaarChecklist(data.bazaarChecklist);
+        if (data.menu) {
+          setMenu(data.menu);
+          setMenuBreakfast(data.menu.breakfast || '');
+          setMenuLunch(data.menu.lunch || '');
+          setMenuDinner(data.menu.dinner || '');
+        }
+        if (data.notices) setNotices(data.notices);
+        setDataLoading(false);
       }
     } catch (e) {
       console.warn("Failed to load stale cache:", e);

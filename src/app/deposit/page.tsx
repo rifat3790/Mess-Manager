@@ -19,7 +19,23 @@ import { cn } from '@/lib/utils';
 
 export default function DepositPage() {
   const { mongoUser } = useAuth();
-  const [members, setMembers] = useState<any[]>([]);
+
+  const getInitialCachedData = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_dashboard_cache_v2');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const activeM = (parsed.allMembers || []).filter((u: any) => u.role !== 'Pending');
+          return { members: activeM };
+        }
+      } catch (e) {}
+    }
+    return { members: [] };
+  };
+
+  const cachedData = getInitialCachedData();
+  const [members, setMembers] = useState<any[]>(cachedData.members);
   const [activeMonth, setActiveMonth] = useState<any>(null);
   
   const [userId, setUserId] = useState('');
@@ -27,7 +43,7 @@ export default function DepositPage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(cachedData.members.length === 0);
 
   const fetchInitialData = async () => {
     if (!mongoUser) return;

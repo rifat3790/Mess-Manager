@@ -4,6 +4,7 @@ export interface IMess extends Document {
   name: string;
   code: string; // Unique join code, e.g. MESS-ABCD
   creatorId: mongoose.Types.ObjectId; // ref User
+  status?: 'Active' | 'Suspended';
   visibleTabs: {
     addMeal: boolean;
     addExpense: boolean;
@@ -18,6 +19,7 @@ const MessSchema: Schema = new Schema({
   name: { type: String, required: true },
   code: { type: String, required: true, unique: true, index: true },
   creatorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  status: { type: String, enum: ['Active', 'Suspended'], default: 'Active' },
   visibleTabs: {
     addMeal: { type: Boolean, default: true },
     addExpense: { type: Boolean, default: true },

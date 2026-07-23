@@ -8,15 +8,37 @@ import { toast } from 'react-hot-toast';
 
 export default function MealPage() {
   const { mongoUser } = useAuth();
-  const [members, setMembers] = useState<MongoUser[]>([]);
+  
+  const getInitialCachedData = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_dashboard_cache_v2');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const activeM = (parsed.allMembers || []).filter((u: any) => u.role !== 'Pending');
+          return { members: activeM };
+        }
+      } catch (e) {}
+    }
+    return { members: [] };
+  };
+
+  const cachedData = getInitialCachedData();
+  const [members, setMembers] = useState<MongoUser[]>(cachedData.members);
   const [activeMonth, setActiveMonth] = useState<any>(null);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
   // State for meals: { [userId]: { breakfast: number, lunch: number, dinner: number } }
-  const [mealsData, setMealsData] = useState<Record<string, { breakfast: number, lunch: number, dinner: number }>>({});
+  const [mealsData, setMealsData] = useState<Record<string, { breakfast: number, lunch: number, dinner: number }>>(() => {
+    const initialMeals: any = {};
+    cachedData.members.forEach((m: any) => {
+      initialMeals[m._id] = { breakfast: 0, lunch: 0, dinner: 0 };
+    });
+    return initialMeals;
+  });
   
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(cachedData.members.length === 0);
 
   useEffect(() => {
     if (mongoUser) {

@@ -8,7 +8,23 @@ import { toast } from 'react-hot-toast';
 
 export default function ExpensePage() {
   const { mongoUser } = useAuth();
-  const [members, setMembers] = useState<MongoUser[]>([]);
+
+  const getInitialCachedData = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_dashboard_cache_v2');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const activeM = (parsed.allMembers || []).filter((u: any) => u.role !== 'Pending');
+          return { members: activeM };
+        }
+      } catch (e) {}
+    }
+    return { members: [] };
+  };
+
+  const cachedData = getInitialCachedData();
+  const [members, setMembers] = useState<MongoUser[]>(cachedData.members);
   const [activeMonth, setActiveMonth] = useState<any>(null);
   
   const [type, setType] = useState<'Meal' | 'Joint' | 'Single'>('Meal');
@@ -22,7 +38,7 @@ export default function ExpensePage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(cachedData.members.length === 0);
   
   const [expensesList, setExpensesList] = useState<any[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);

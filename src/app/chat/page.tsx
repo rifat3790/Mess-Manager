@@ -11,20 +11,44 @@ export default function ChatPage() {
   const { mongoUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'Group' | 'Manager'>('Group');
   
+  const getInitialChatCache = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedGroup = localStorage.getItem('mess_cached_group_chat');
+        const cachedManager = localStorage.getItem('mess_cached_manager_chat');
+        return {
+          group: cachedGroup ? JSON.parse(cachedGroup) : [],
+          manager: cachedManager ? JSON.parse(cachedManager) : []
+        };
+      } catch (e) {}
+    }
+    return { group: [], manager: [] };
+  };
+
+  const initialCache = getInitialChatCache();
+
   // Group Chat State
-  const [groupMessages, setGroupMessages] = useState<any[]>([]);
+  const [groupMessages, setGroupMessages] = useState<any[]>(initialCache.group);
   const [groupInput, setGroupInput] = useState('');
   
   // Direct Chat State
-  const [managerMessages, setManagerMessages] = useState<any[]>([]);
+  const [managerMessages, setManagerMessages] = useState<any[]>(initialCache.manager);
   const [managerInput, setManagerInput] = useState('');
   const [allMembers, setAllMembers] = useState<any[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialCache.group.length === 0);
   const [sending, setSending] = useState(false);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const quickChips = [
+    "আজকের বাজার কে করবে?",
+    "গ্যাস রিফিল প্রয়োজন!",
+    "আজকের রাতের খাবারের মেনু কি?",
+    "আজকের বাজার জমা আপডেট করা হয়েছে।",
+    "মেস মিটিং আজ সন্ধ্যা ৮টায়।"
+  ];
 
   async function fetchMessagesBackground() {
     try {
@@ -33,8 +57,18 @@ export default function ChatPage() {
         getGroupMessages(mongoUser._id),
         getDirectMessages(mongoUser._id)
       ]);
-      if (groupRes.success) setGroupMessages(groupRes.messages);
-      if (managerRes.success) setManagerMessages(managerRes.messages);
+      if (groupRes.success) {
+        setGroupMessages(groupRes.messages);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('mess_cached_group_chat', JSON.stringify(groupRes.messages));
+        }
+      }
+      if (managerRes.success) {
+        setManagerMessages(managerRes.messages);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('mess_cached_manager_chat', JSON.stringify(managerRes.messages));
+        }
+      }
       
       if (activeTab === 'Manager' && selectedMemberId && mongoUser) {
         markMessagesAsRead(mongoUser._id, selectedMemberId);

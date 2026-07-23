@@ -9,16 +9,32 @@ import { getMembers } from '@/app/actions/dataActions';
 export default function ManageBazaarPage() {
   const { mongoUser } = useAuth();
   
-  const [schedules, setSchedules] = useState<any[]>([]);
-  const [members, setMembers] = useState<MongoUser[]>([]);
+  const getInitialCachedData = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_dashboard_cache_v2');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const activeM = (parsed.allMembers || []).filter((u: any) => u.role !== 'Pending');
+          return { members: activeM, schedules: parsed.bazaarSchedules || [] };
+        }
+      } catch (e) {}
+    }
+    return { members: [], schedules: [] };
+  };
+
+  const cachedData = getInitialCachedData();
+  const [schedules, setSchedules] = useState<any[]>(cachedData.schedules);
+  const [members, setMembers] = useState<MongoUser[]>(cachedData.members);
   
   // Assign form state
-  const [userId, setUserId] = useState('');
+  const [userId, setUserId] = useState(cachedData.members[0]?._id || '');
   const [fromDate, setFromDate] = useState(new Date().toISOString().split('T')[0]);
   const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
+  const [autoGenerating, setAutoGenerating] = useState(false);
+  const [fetching, setFetching] = useState(cachedData.members.length === 0);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -33,7 +49,7 @@ export default function ManageBazaarPage() {
       if (memRes.success) {
         const activeMembers = (memRes.users || []).filter((u: any) => u.role !== 'Pending');
         setMembers(activeMembers);
-        if (activeMembers.length > 0) {
+        if (activeMembers.length > 0 && !userId) {
           setUserId(activeMembers[0]._id);
         }
       }

@@ -9,8 +9,20 @@ import { toast } from 'react-hot-toast';
 
 export function LedgerTable() {
   const { mongoUser } = useAuth();
-  const [entries, setEntries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  const getInitialLedgerCache = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_cached_ledger_entries');
+        return cached ? JSON.parse(cached) : [];
+      } catch (e) {}
+    }
+    return [];
+  };
+
+  const initialEntries = getInitialLedgerCache();
+  const [entries, setEntries] = useState<any[]>(initialEntries);
+  const [loading, setLoading] = useState(initialEntries.length === 0);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   
   const [editingEntry, setEditingEntry] = useState<any>(null);
@@ -26,10 +38,13 @@ export function LedgerTable() {
 
   async function fetchData() {
     if (!mongoUser) return;
-    setLoading(true);
+    if (entries.length === 0) setLoading(true);
     const res = await getLedgerData(mongoUser._id);
     if (res.success) {
       setEntries(res.entries);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mess_cached_ledger_entries', JSON.stringify(res.entries));
+      }
     }
     setLoading(false);
   }

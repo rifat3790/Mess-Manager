@@ -41,10 +41,40 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [mongoUser, setMongoUser] = useState<MongoUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [messName, setMessName] = useState("Mohakhali Mess");
-  const [settings, setSettings] = useState<any>(null);
+  const [mongoUser, setMongoUser] = useState<MongoUser | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_cached_mongo_user');
+        return cached ? JSON.parse(cached) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('mess_cached_mongo_user');
+    }
+    return true;
+  });
+  const [messName, setMessName] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('mess_cached_name') || "Mohakhali Mess";
+    }
+    return "Mohakhali Mess";
+  });
+  const [settings, setSettings] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_cached_settings');
+        return cached ? JSON.parse(cached) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   const fetchSettings = async (userId: string) => {
     try {
@@ -52,8 +82,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const res = await getSettings(userId);
       if (res.success && res.settings) {
         setSettings(res.settings);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('mess_cached_settings', JSON.stringify(res.settings));
+        }
         if (res.settings.messName) {
           setMessName(res.settings.messName);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mess_cached_name', res.settings.messName);
+          }
         }
       } else {
         setSettings(null);
@@ -71,6 +107,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (res.ok) {
           const data = await res.json();
           setMongoUser(data.user);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mess_cached_mongo_user', JSON.stringify(data.user));
+          }
           if (data.user && data.user._id) {
             await fetchSettings(data.user._id);
           }
@@ -108,6 +147,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (res.ok) {
             const data = await res.json();
             setMongoUser(data.user);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('mess_cached_mongo_user', JSON.stringify(data.user));
+            }
             if (data.user && data.user._id) {
               fetchSettings(data.user._id);
             }
@@ -115,17 +157,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setMongoUser(null);
             setSettings(null);
             setMessName("Mohakhali Mess");
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('mess_cached_mongo_user');
+              localStorage.removeItem('mess_cached_settings');
+              localStorage.removeItem('mess_cached_name');
+            }
           }
         } catch (err) {
           console.error("Failed to fetch mongo user", err);
-          setMongoUser(null);
-          setSettings(null);
-          setMessName("Mohakhali Mess");
         }
       } else {
         setMongoUser(null);
         setSettings(null);
         setMessName("Mohakhali Mess");
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('mess_cached_mongo_user');
+          localStorage.removeItem('mess_cached_settings');
+          localStorage.removeItem('mess_cached_name');
+        }
       }
       
       setLoading(false);

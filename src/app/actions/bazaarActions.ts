@@ -179,3 +179,59 @@ export async function deleteBazaarChecklistItem(adminUserId: string, id: string)
     return { success: false, error: error.message };
   }
 }
+
+export async function autoGenerateBazaarSchedule(managerUserId: string, turnDays: number = 2) {
+  try {
+    await connectToDatabase();
+    const manager = await User.findById(managerUserId).lean();
+    if (!manager || (manager.role !== 'Super Admin' && manager.role !== 'Manager') || !manager.messId) {
+      return { success: false, error: "অনুমতি নেই!" };
+    }
+
+    const activeMonth = await Month.findOne({ isActive: true, messId: manager.messId }).lean();
+    if (!activeMonth) return { success: false, error: "কোনো রানিং মাস খুঁজে পাওয়া যায়নি" };
+
+    const activeMembers = await User.find({ role: { $ne: 'Pending' }, messId: manager.messId }).select('_id name').lean();
+    if (activeMembers.length === 0) return { success: false, error: "কোনো অ্যাক্টিভ মেম্বার নাই" };
+
+    // Clear existing pending/approved schedules for this month to regenerate
+    await BazaarSchedule.deleteMany({ monthId: activeMonth._id });
+
+    const startDate = new Date(activeMonth.startDate || new Date());
+    const totalDaysInMonth = 30; // generate for 30 days
+    let memberIndex = 0;
+
+    const newSchedules: any[] = [];
+    for (let dayOffset = 0; dayOffset < totalDaysInMonth; dayOffset += turnDays) {
+      const fromD = new Date(startDate);
+      fromD.setDate(fromD.getDate() + dayOffset);
+
+      const toD = new Date(fromD);
+      toD.setDate(toD.getDate() + turnDays - 1);
+
+      const assignedMember = activeMembers[memberIndex % activeMembers.length];
+      memberIndex++;
+
+      newSchedules.push({
+        monthId: activeMonth._id,
+        userId: assignedMember._id,
+        fromDate: fromD,
+        toDate: toD,
+        status: 'Approved'
+      });
+    }
+
+    await BazaarSchedule.insertMany(newSchedules);
+
+    await createNotification(
+      "অটো বাজার শিডিউল জেনারেট",
+      `মেস ম্যানেজার চলতি মাসের জন্য সকল মেম্বারদের বাজার শিডিউল সমভাবে বন্টন করেছেন।`,
+      undefined,
+      manager.messId.toString()
+    );
+
+    return { success: true, count: newSchedules.length };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

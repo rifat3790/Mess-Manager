@@ -30,4 +30,7 @@ const MonthSchema: Schema = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+MonthSchema.index({ isActive: 1, messId: 1 });
+MonthSchema.index({ messId: 1, createdAt: -1 });
+
 export default mongoose.models.Month || mongoose.model<IMonth>('Month', MonthSchema);

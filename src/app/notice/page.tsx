@@ -8,8 +8,23 @@ import { toast } from 'react-hot-toast';
 
 export default function NoticePage() {
   const { mongoUser } = useAuth();
-  const [notices, setNotices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const getInitialNoticeCache = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_dashboard_cache_v2');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          return parsed.notices || [];
+        }
+      } catch (e) {}
+    }
+    return [];
+  };
+
+  const initialNotices = getInitialNoticeCache();
+  const [notices, setNotices] = useState<any[]>(initialNotices);
+  const [loading, setLoading] = useState(initialNotices.length === 0);
   
   // Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,7 +43,7 @@ export default function NoticePage() {
   const fetchNotices = async () => {
     if (!mongoUser) return;
     try {
-      setLoading(true);
+      if (notices.length === 0) setLoading(true);
       const res = await getLatestNotices(mongoUser._id);
       if (res.success) {
         setNotices(res.notices || []);

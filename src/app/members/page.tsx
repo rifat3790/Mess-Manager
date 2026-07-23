@@ -10,8 +10,23 @@ import { toast } from 'react-hot-toast';
 
 export default function MembersPage() {
   const { mongoUser } = useAuth();
-  const [users, setUsers] = useState<MongoUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  const getInitialMemberCache = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('mess_dashboard_cache_v2');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          return parsed.allMembers || [];
+        }
+      } catch (e) {}
+    }
+    return [];
+  };
+
+  const initialUsers = getInitialMemberCache();
+  const [users, setUsers] = useState<MongoUser[]>(initialUsers);
+  const [loading, setLoading] = useState(initialUsers.length === 0);
   
   // Permission management states
   const [selectedUserForPerms, setSelectedUserForPerms] = useState<any | null>(null);

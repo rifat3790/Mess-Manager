@@ -22,4 +22,7 @@ const MealSchema: Schema = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+MealSchema.index({ monthId: 1, userId: 1, date: 1 });
+MealSchema.index({ monthId: 1, date: 1 });
+
 export default mongoose.models.Meal || mongoose.model<IMeal>('Meal', MealSchema);

@@ -385,21 +385,22 @@ export async function getMembers(userId: string) {
   }
 }
 
-export async function getDashboardData(userId: string) {
+export async function getDashboardData(userId: string, targetUser?: any, targetMonth?: any) {
   try {
     await connectToDatabase();
     
-    const user = await User.findById(userId).lean();
+    const user = targetUser || await User.findById(userId).lean();
     if (!user || !user.messId) return { success: true, stats: null, members: [] };
 
-    const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
+    const activeMonth = targetMonth !== undefined ? targetMonth : await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
     if (!activeMonth) return { success: true, stats: null, members: [] };
 
-    const users = await User.find({ role: { $ne: 'Pending' }, messId: user.messId }).lean();
-
-    const meals = await Meal.find({ monthId: activeMonth._id }).lean();
-    const expenses = await Expense.find({ monthId: activeMonth._id }).lean();
-    const deposits = await Deposit.find({ monthId: activeMonth._id }).lean();
+    const [users, meals, expenses, deposits] = await Promise.all([
+      User.find({ role: { $ne: 'Pending' }, messId: user.messId }).lean(),
+      Meal.find({ monthId: activeMonth._id }).lean(),
+      Expense.find({ monthId: activeMonth._id }).lean(),
+      Deposit.find({ monthId: activeMonth._id }).lean()
+    ]);
 
     const totalMeals = meals.reduce((sum, meal) => sum + meal.mealCount, 0);
     const totalDeposit = deposits.reduce((sum, dep) => sum + dep.amount, 0);
@@ -783,14 +784,14 @@ export async function removeMember(adminUserId: string, memberId: string) {
   }
 }
 
-export async function getUserMealStatusForTodayAndTomorrow(userId: string) {
+export async function getUserMealStatusForTodayAndTomorrow(userId: string, targetUser?: any, targetMonth?: any) {
   try {
     await connectToDatabase();
     
-    const user = await User.findById(userId).lean();
+    const user = targetUser || await User.findById(userId).lean();
     if (!user || !user.messId) return { success: false, error: "Mess not found" };
 
-    const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
+    const activeMonth = targetMonth !== undefined ? targetMonth : await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
     if (!activeMonth) {
       return { success: false, error: "No active month" };
     }
@@ -807,31 +808,30 @@ export async function getUserMealStatusForTodayAndTomorrow(userId: string) {
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
     tomorrowEnd.setHours(23, 59, 59, 999);
 
-    const todayMeal = await Meal.findOne({
-      monthId: activeMonth._id,
-      userId,
-      date: { $gte: todayStart, $lte: todayEnd }
-    });
-
-    const tomorrowMeal = await Meal.findOne({
-      monthId: activeMonth._id,
-      userId,
-      date: { $gte: tomorrowStart, $lte: tomorrowEnd }
-    });
-
-    const todayRequest = await MealRequest.findOne({
-      monthId: activeMonth._id,
-      userId,
-      status: 'Pending',
-      date: { $gte: todayStart, $lte: todayEnd }
-    });
-
-    const tomorrowRequest = await MealRequest.findOne({
-      monthId: activeMonth._id,
-      userId,
-      status: 'Pending',
-      date: { $gte: tomorrowStart, $lte: tomorrowEnd }
-    });
+    const [todayMeal, tomorrowMeal, todayRequest, tomorrowRequest] = await Promise.all([
+      Meal.findOne({
+        monthId: activeMonth._id,
+        userId,
+        date: { $gte: todayStart, $lte: todayEnd }
+      }).lean(),
+      Meal.findOne({
+        monthId: activeMonth._id,
+        userId,
+        date: { $gte: tomorrowStart, $lte: tomorrowEnd }
+      }).lean(),
+      MealRequest.findOne({
+        monthId: activeMonth._id,
+        userId,
+        status: 'Pending',
+        date: { $gte: todayStart, $lte: todayEnd }
+      }).lean(),
+      MealRequest.findOne({
+        monthId: activeMonth._id,
+        userId,
+        status: 'Pending',
+        date: { $gte: tomorrowStart, $lte: tomorrowEnd }
+      }).lean()
+    ]);
 
     return {
       success: true,
@@ -1018,14 +1018,14 @@ export async function createOrUpdateMealRequest(
   }
 }
 
-export async function getPendingMealRequests(userId: string) {
+export async function getPendingMealRequests(userId: string, targetUser?: any, targetMonth?: any) {
   try {
     await connectToDatabase();
     
-    const user = await User.findById(userId).lean();
+    const user = targetUser || await User.findById(userId).lean();
     if (!user || !user.messId) return { success: true, requests: [] };
 
-    const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
+    const activeMonth = targetMonth !== undefined ? targetMonth : await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
     if (!activeMonth) return { success: true, requests: [] };
 
     const requests = await MealRequest.find({
@@ -1184,10 +1184,10 @@ export async function rejectMealRequest(requestId: string, adminUserId: string) 
   }
 }
 
-export async function getTodayMenu(userId: string) {
+export async function getTodayMenu(userId: string, targetUser?: any) {
   try {
     await connectToDatabase();
-    const user = await User.findById(userId).lean();
+    const user = targetUser || await User.findById(userId).lean();
     if (!user || !user.messId) return { success: false, error: "Mess not found" };
     
     const todayStart = new Date();
@@ -1258,11 +1258,11 @@ export async function updateTodayMenu(breakfast: string, lunch: string, dinner: 
   }
 }
 
-export async function getLatestNotices(userId: string) {
+export async function getLatestNotices(userId: string, targetUser?: any) {
   try {
     await connectToDatabase();
 
-    const user = await User.findById(userId).lean();
+    const user = targetUser || await User.findById(userId).lean();
     if (!user || !user.messId) return { success: true, notices: [] };
 
     const notices = await Notice.find({ messId: user.messId })
@@ -1486,9 +1486,8 @@ export async function getUnifiedDashboardData(userId: string) {
   try {
     await connectToDatabase();
 
-    // Fetch active month first (needed for other queries)
-    const activeMonth = await Month.findOne({ isActive: true }).sort({ createdAt: -1 }).lean();
-    if (!activeMonth) {
+    const user = await User.findById(userId).lean();
+    if (!user || !user.messId) {
       return {
         success: true,
         dashboard: { stats: null, members: [] },
@@ -1504,7 +1503,8 @@ export async function getUnifiedDashboardData(userId: string) {
       };
     }
 
-    // Run all other queries concurrently on the server
+    const activeMonth = await Month.findOne({ isActive: true, messId: user.messId }).sort({ createdAt: -1 }).lean();
+
     const [
       dashboardRes,
       bazaarSchedulesRes,
@@ -1517,15 +1517,15 @@ export async function getUnifiedDashboardData(userId: string) {
       noticesRes,
       ratingsRes
     ] = await Promise.all([
-      getDashboardData(userId),
+      getDashboardData(userId, user, activeMonth),
       getBazaarSchedules(userId),
       getNotifications(userId),
       getContacts(userId),
       getBazaarChecklist(userId),
-      getUserMealStatusForTodayAndTomorrow(userId),
-      getPendingMealRequests(userId),
-      getTodayMenu(userId),
-      getLatestNotices(userId),
+      getUserMealStatusForTodayAndTomorrow(userId, user, activeMonth),
+      getPendingMealRequests(userId, user, activeMonth),
+      getTodayMenu(userId, user),
+      getLatestNotices(userId, user),
       getMenuRatings(new Date(), userId)
     ]);
 

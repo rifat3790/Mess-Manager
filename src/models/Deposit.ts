@@ -16,4 +16,7 @@ const DepositSchema: Schema = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+DepositSchema.index({ monthId: 1, userId: 1 });
+DepositSchema.index({ monthId: 1, date: -1 });
+
 export default mongoose.models.Deposit || mongoose.model<IDeposit>('Deposit', DepositSchema);
