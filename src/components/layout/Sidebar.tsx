@@ -24,6 +24,8 @@ import {
   PlusCircle,
   BookOpen,
   MessageSquare,
+  CreditCard,
+  Crown,
   Bell
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -64,6 +66,7 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
     // Start with empty items
     let items = [
       { name: 'হোম পেজ', icon: Home, href: '/' },
+      { name: '💳 সাবস্ক্রিপশন প্ল্যান', icon: Crown, href: '/subscription' },
     ];
 
     if (role === 'Member' && settings) {
@@ -83,6 +86,7 @@ export function Sidebar({ className, isMobileMenuOpen = false, setIsMobileMenuOp
     if (role === 'Manager') {
       items = [
         { name: 'হোম পেজ', icon: Home, href: '/' },
+        { name: '💳 সাবস্ক্রিপশন প্ল্যান', icon: Crown, href: '/subscription' },
         { name: 'মেস নোটিশ বোর্ড', icon: Bell, href: '/notice' },
         { name: 'টাকা জমা', icon: Wallet, href: '/deposit' },
         { name: 'মিল যুক্ত', icon: Utensils, href: '/meal' },

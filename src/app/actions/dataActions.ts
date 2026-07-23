@@ -20,9 +20,37 @@ import { getBazaarSchedules, getBazaarChecklist } from './bazaarActions';
 import { getNotifications } from './notificationActions';
 import { getContacts } from './adminActions';
 
+async function checkMessSubscriptionGuard(userId: string) {
+  const user = await User.findById(userId).lean();
+  if (!user) return { allowed: false, error: "ইউজার অ্যাকাউন্ট পাওয়া যায়নি।" };
+  if (user.role === 'Super Admin') return { allowed: true };
+  if (!user.messId) return { allowed: false, error: "কোনো মেসে সংযুক্ত নেই।" };
+
+  const mess = await Mess.findById(user.messId).lean();
+  if (!mess) return { allowed: false, error: "মেস ডাটা পাওয়া যায়নি।" };
+
+  const now = new Date();
+  const expiresAt = mess.subscriptionExpiresAt ? new Date(mess.subscriptionExpiresAt) : null;
+  const isActive = mess.subscriptionStatus === 'Active' && expiresAt && expiresAt > now;
+
+  if (!isActive) {
+    return {
+      allowed: false,
+      error: "⚠️ আপনার মেসের প্রিমিয়াম সাবস্ক্রিপশন মেয়াদোত্তীর্ণ! ডেটা যোগ বা এডিট করতে সাবস্ক্রিপশন রেনিউ করুন।"
+    };
+  }
+
+  return { allowed: true };
+}
+
 export async function addMeal(monthId: string, userId: string, date: Date, mealCount: number) {
   try {
     await connectToDatabase();
+
+    const guard = await checkMessSubscriptionGuard(userId);
+    if (!guard.allowed) {
+      return { success: false, error: guard.error };
+    }
     
     let meal = await Meal.findOne({ monthId, userId, date: new Date(date).setHours(0,0,0,0) });
     
@@ -73,6 +101,13 @@ export async function addMeal(monthId: string, userId: string, date: Date, mealC
 export async function addExpense(monthId: string, userId: string | null, type: 'Meal' | 'Joint' | 'Single', amount: number, description: string, date: Date, sharedBetween?: string[]) {
   try {
     await connectToDatabase();
+
+    if (userId) {
+      const guard = await checkMessSubscriptionGuard(userId);
+      if (!guard.allowed) {
+        return { success: false, error: guard.error };
+      }
+    }
     
     // For Joint (shared) expenses: always snapshot exactly which members share this cost.
     // If no sharedBetween list is provided, it means "all current active members".
@@ -105,7 +140,7 @@ export async function addExpense(monthId: string, userId: string | null, type: '
     await syncDataToSheet(month.sheetTabName, {
       date: new Date(date).toLocaleDateString(),
       memberName,
-      type: `Expense (${type})`,
+      type: `${type} Expense`,
       description,
       amount,
       time: new Date().toLocaleTimeString(),

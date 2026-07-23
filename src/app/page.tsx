@@ -81,6 +81,11 @@ import {
   updateMessStatus,
   updateUserRoleAndPermissions
 } from './actions/adminActions';
+import { 
+  getSubscriptionRequests, 
+  approveSubscriptionRequest, 
+  rejectSubscriptionRequest 
+} from './actions/subscriptionActions';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 
@@ -117,8 +122,52 @@ export default function Home() {
   const [saSelectedRole, setSaSelectedRole] = useState<'Super Admin' | 'Manager' | 'Member' | 'Pending'>('Member');
   const [saRoleLoading, setSaRoleLoading] = useState(false);
   const [saMessLoading, setSaMessLoading] = useState<Record<string, boolean>>({});
-  const [saActiveTab, setSaActiveTab] = useState<'overview' | 'messes' | 'users' | 'broadcast' | 'health'>('overview');
+  const [saActiveTab, setSaActiveTab] = useState<'overview' | 'messes' | 'users' | 'subscriptions' | 'broadcast' | 'health'>('overview');
   const [saMessFilter, setSaMessFilter] = useState<'ALL' | 'Active' | 'Suspended'>('ALL');
+  const [saSubRequests, setSaSubRequests] = useState<any[]>([]);
+  const [saSubLoading, setSaSubLoading] = useState<Record<string, boolean>>({});
+
+  const handleSAApproveSubscription = async (requestId: string, months?: number) => {
+    if (!mongoUser?._id) return;
+    try {
+      setSaSubLoading(prev => ({ ...prev, [requestId]: true }));
+      const res = await approveSubscriptionRequest(mongoUser._id, requestId, months);
+      if (res.success) {
+        toast.success("🎉 মেস সাবস্ক্রিপশন সফলভাবে অনুমোদিত হয়েছে!");
+        const [updatedData, subRes] = await Promise.all([
+          getSuperAdminDashboardData(mongoUser._id),
+          getSubscriptionRequests(mongoUser._id)
+        ]);
+        if (updatedData.success) setSuperAdminData(updatedData);
+        if (subRes.success) setSaSubRequests(subRes.requests || []);
+      } else {
+        toast.error(res.error || "অনুমোদন ব্যর্থ");
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaSubLoading(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
+
+  const handleSARejectSubscription = async (requestId: string) => {
+    if (!mongoUser?._id) return;
+    try {
+      setSaSubLoading(prev => ({ ...prev, [requestId]: true }));
+      const res = await rejectSubscriptionRequest(mongoUser._id, requestId);
+      if (res.success) {
+        toast.success("পেমেন্ট রিকোয়েস্ট বাতিল করা হয়েছে");
+        const subRes = await getSubscriptionRequests(mongoUser._id);
+        if (subRes.success) setSaSubRequests(subRes.requests || []);
+      } else {
+        toast.error(res.error || "বাতিল করতে সমস্যা হয়েছে");
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaSubLoading(prev => ({ ...prev, [requestId]: false }));
+    }
+  };
 
   const handleSABroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1083,6 +1132,18 @@ export default function Home() {
           </button>
           <button
             type="button"
+            onClick={() => setSaActiveTab('subscriptions')}
+            className={`px-5 py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-2 whitespace-nowrap ${
+              saActiveTab === 'subscriptions'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'
+            }`}
+          >
+            <Crown className="w-4 h-4 text-amber-500" />
+            💳 সাবস্ক্রিপশন পেমেন্ট ({saSubRequests.filter((r: any) => r.status === 'Pending').length})
+          </button>
+          <button
+            type="button"
             onClick={() => setSaActiveTab('broadcast')}
             className={`px-5 py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-2 whitespace-nowrap ${
               saActiveTab === 'broadcast'
@@ -1466,6 +1527,122 @@ export default function Home() {
                   {filteredUsers.length === 0 && (
                     <tr>
                       <td colSpan={4} className="px-4 py-12 text-center text-slate-400 font-bold">কোনো ইউজার পাওয়া যায়নি।</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: SUBSCRIPTION PAYMENT REQUESTS */}
+        {saActiveTab === 'subscriptions' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-amber-500" />
+                  মেস সাবস্ক্রিপশন পেমেন্ট রিকোয়েস্ট সেন্টার
+                </h3>
+                <p className="text-xs text-slate-400 font-bold mt-0.5">ব্যবহারকারীদের পাঠানো bKash/Nagad পেমেন্ট ও TrxID অনুমোদন হাব</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-3.5 py-1.5 bg-amber-50 text-amber-700 text-xs font-black rounded-xl border border-amber-100">
+                  পেন্ডিং: {saSubRequests.filter((r: any) => r.status === 'Pending').length} টি
+                </span>
+                <span className="px-3.5 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-black rounded-xl border border-emerald-100">
+                  অনুমোদিত: {saSubRequests.filter((r: any) => r.status === 'Approved').length} টি
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <th className="px-4 py-3">মেস ও ইউজার</th>
+                    <th className="px-4 py-3">মেথড ও নম্বর</th>
+                    <th className="px-4 py-3">TrxID ও পরিমাণ</th>
+                    <th className="px-4 py-3 text-center">মেয়াদ</th>
+                    <th className="px-4 py-3 text-center">স্ট্যাটাস</th>
+                    <th className="px-4 py-3 text-right">অনুমোদন ও পারমিশন</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {saSubRequests.map((req: any) => (
+                    <tr key={req._id} className="hover:bg-slate-50/50 transition-colors text-xs">
+                      <td className="px-4 py-3.5">
+                        <p className="font-bold text-slate-800">{req.messId?.name || 'অজানা মেস'}</p>
+                        <p className="text-[10px] text-slate-400 font-medium">
+                          {req.userId?.name} ({req.userId?.role})
+                        </p>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="font-bold text-slate-700 block">{req.paymentMethod}</span>
+                        <span className="text-[10px] font-mono text-slate-500">{req.senderPhone}</span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="font-mono font-black text-indigo-600 block">{req.trxId}</span>
+                        <span className="text-xs font-black text-slate-900">৳{req.amount}</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <span className="px-3 py-1 bg-indigo-50 text-indigo-700 font-black rounded-full border border-indigo-100">
+                          {req.months} মাস (31d/mo)
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        {req.status === 'Approved' ? (
+                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg border border-emerald-100">
+                            ✅ অনুমোদিত
+                          </span>
+                        ) : req.status === 'Rejected' ? (
+                          <span className="px-2.5 py-1 bg-rose-50 text-rose-700 text-[10px] font-black rounded-lg border border-rose-100">
+                            ❌ বাতিল
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 bg-amber-50 text-amber-700 text-[10px] font-black rounded-lg border border-amber-100 animate-pulse">
+                            ⏳ পেন্ডিং
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-right space-x-1.5">
+                        {req.status === 'Pending' ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleSAApproveSubscription(req._id, req.months)}
+                              disabled={saSubLoading[req._id]}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs shadow-sm transition-all disabled:opacity-50"
+                            >
+                              {saSubLoading[req._id] ? '...' : `অনুমোদন (${req.months} মাস)`}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSARejectSubscription(req._id)}
+                              disabled={saSubLoading[req._id]}
+                              className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold rounded-xl text-xs border border-rose-200"
+                            >
+                              বাতিল
+                            </button>
+                          </div>
+                        ) : req.status === 'Approved' ? (
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            {new Date(req.approvedAt).toLocaleDateString()} এ এপ্রুভ হয়েছে
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-rose-400 font-medium">
+                            বাতিল করা হয়েছে
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {saSubRequests.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center text-slate-400 font-bold">
+                        কোনো সাবস্ক্রিপশন পেমেন্ট রিকোয়েস্ট পাওয়া যায়নি।
+                      </td>
                     </tr>
                   )}
                 </tbody>
