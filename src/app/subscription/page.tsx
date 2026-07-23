@@ -124,13 +124,16 @@ export default function SubscriptionPage() {
     }
   };
 
+  const activeChatReq = subData?.pendingRequest || subData?.latestRequest;
+
   const handleSendUserMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userMsgText.trim() || !subData?.pendingRequest?._id || !mongoUser?._id) return;
+    const reqId = activeChatReq?._id;
+    if (!userMsgText.trim() || !reqId || !mongoUser?._id) return;
 
     try {
       setSendingMsg(true);
-      const res = await sendSubscriptionMessage(mongoUser._id, subData.pendingRequest._id, userMsgText);
+      const res = await sendSubscriptionMessage(mongoUser._id, reqId, userMsgText);
       if (res.success) {
         toast.success("বার্তা সুপার অ্যাডমিনকে পাঠানো হয়েছে!");
         setUserMsgText('');
@@ -297,7 +300,7 @@ export default function SubscriptionPage() {
           </div>
 
           {/* Super Admin Direct Message & Conversation Box */}
-          {pendingReq && (
+          {activeChatReq && (
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2 text-indigo-700 font-extrabold text-sm">
@@ -305,14 +308,14 @@ export default function SubscriptionPage() {
                   <span>সুপার অ্যাডমিন সাপোর্ট ও মেসেজিং ডায়ালগ</span>
                 </div>
                 <span className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-extrabold rounded-xl border border-amber-100">
-                  TrxID: {pendingReq.trxId}
+                  TrxID: {activeChatReq.trxId}
                 </span>
               </div>
 
               {/* Message List */}
               <div className="space-y-3 max-h-60 overflow-y-auto p-2 scrollbar-thin">
-                {pendingReq.messages && pendingReq.messages.length > 0 ? (
-                  pendingReq.messages.map((m: any, idx: number) => (
+                {activeChatReq.messages && activeChatReq.messages.length > 0 ? (
+                  activeChatReq.messages.map((m: any, idx: number) => (
                     <div
                       key={idx}
                       className={`p-3.5 rounded-2xl text-xs space-y-1 max-w-md ${

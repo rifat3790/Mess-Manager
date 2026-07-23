@@ -281,6 +281,10 @@ export async function getMessSubscriptionDetails(messId: string | any) {
       status: 'Pending'
     }).sort({ createdAt: -1 }).lean();
 
+    const latestRequest = await SubscriptionRequest.findOne({
+      messId: resolvedMessId
+    }).sort({ createdAt: -1 }).lean();
+
     const now = new Date();
     const expiresAt = mess.subscriptionExpiresAt ? new Date(mess.subscriptionExpiresAt) : null;
     const isActive = mess.subscriptionStatus === 'Active' && expiresAt && expiresAt > now;
@@ -300,7 +304,8 @@ export async function getMessSubscriptionDetails(messId: string | any) {
         daysLeft,
         planMonths: mess.subscriptionPlanMonths || 0,
         lastTrxId: mess.lastPaymentTrxId || null,
-        pendingRequest: pendingRequest ? JSON.parse(JSON.stringify(pendingRequest)) : null
+        pendingRequest: pendingRequest ? JSON.parse(JSON.stringify(pendingRequest)) : null,
+        latestRequest: latestRequest ? JSON.parse(JSON.stringify(latestRequest)) : null
       }
     };
   } catch (error: any) {
